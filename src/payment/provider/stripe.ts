@@ -1201,7 +1201,7 @@ export class StripeProvider implements PaymentProvider {
 
   /**
    * Map application locale to Stripe's supported locales
-   * @param locale Application locale (e.g., 'en', 'zh-CN')
+   * @param locale Application locale (e.g., 'en')
    * @returns Stripe locale string
    */
   private mapLocaleToStripeLocale(locale: string): string {

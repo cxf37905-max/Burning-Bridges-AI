@@ -25,6 +25,12 @@ interface LocaleLayoutProps {
   params: Promise<{ locale: Locale }>;
 }
 
+export function generateStaticParams() {
+  return routing.locales.map((locale) => ({ locale }));
+}
+
+export const dynamicParams = false;
+
 /**
  * 1. Locale Layout
  * https://next-intl.dev/docs/getting-started/app-router/with-i18n-routing#layout

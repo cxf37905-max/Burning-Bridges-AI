@@ -18,6 +18,7 @@ export async function generateMetadata({
   return constructMetadata({
     title: pt('title') + ' | ' + t('title'),
     description: t('description'),
+    noIndex: true,
     locale,
     pathname: '/auth/login',
   });

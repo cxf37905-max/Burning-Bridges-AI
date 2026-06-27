@@ -3,7 +3,7 @@ import { WaitlistFormCard } from '@/components/waitlist/waitlist-form-card';
 import { constructMetadata } from '@/lib/metadata';
 import type { Metadata } from 'next';
 import type { Locale } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 export async function generateMetadata({
   params,
@@ -21,7 +21,14 @@ export async function generateMetadata({
   });
 }
 
-export default async function WaitlistPage() {
+export default async function WaitlistPage({
+  params,
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
   const t = await getTranslations('WaitlistPage');
 
   return (

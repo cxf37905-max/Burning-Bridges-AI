@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { MailIcon, TwitterIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import type { Locale } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 export async function generateMetadata({
   params,
@@ -29,7 +29,14 @@ export async function generateMetadata({
 /**
  * inspired by https://astro-nomy.vercel.app/about
  */
-export default async function AboutPage() {
+export default async function AboutPage({
+  params,
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+
   const t = await getTranslations('AboutPage');
 
   return (

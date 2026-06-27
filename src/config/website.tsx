@@ -82,7 +82,7 @@ export const websiteConfig: WebsiteConfig = {
     enableGoogleLogin: true,
     enableGithubLogin: true,
     enableCredentialLogin: true,
-    enableDeleteUser: true,
+    enableDeleteUser: false,
   },
   i18n: {
     defaultLocale: 'en',
@@ -91,11 +91,6 @@ export const websiteConfig: WebsiteConfig = {
         flag: '🇺🇸',
         name: 'English',
         hreflang: 'en',
-      },
-      zh: {
-        flag: '🇨🇳',
-        name: '中文',
-        hreflang: 'zh-CN',
       },
     },
   },

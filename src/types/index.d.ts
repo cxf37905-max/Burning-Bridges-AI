@@ -113,7 +113,7 @@ export interface AuthConfig {
 /**
  * I18n configuration
  *
- * hreflang: Hreflang value for SEO (e.g., 'en', 'zh-CN')
+ * hreflang: Hreflang value for SEO (e.g., 'en')
  * https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes
  * https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
  */
@@ -122,7 +122,7 @@ export interface I18nConfig {
   locales: Record<string, {
     flag?: string;                    // The flag of the locale, leave empty if you don't want to display the flag
     name: string;                     // The name of the locale
-    hreflang?: string;                // Hreflang value for SEO (e.g., 'en', 'zh-CN')
+    hreflang?: string;                // Hreflang value for SEO (e.g., 'en')
   }>;
 }
 

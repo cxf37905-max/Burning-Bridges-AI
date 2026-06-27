@@ -1,6 +1,5 @@
 import { docsI18nConfig } from '@/lib/docs/i18n';
 import { source } from '@/lib/source';
-import { createTokenizer } from '@orama/tokenizers/mandarin';
 import { createI18nSearchAPI } from 'fumadocs-core/search/server';
 
 /**
@@ -9,9 +8,7 @@ import { createI18nSearchAPI } from 'fumadocs-core/search/server';
  * 1. For internationalization, use createI18nSearchAPI:
  * https://fumadocs.dev/docs/headless/search/orama#internationalization
  *
- * 2. For special languages like Chinese, configure custom tokenizers:
- * https://fumadocs.dev/docs/headless/search/orama#special-languages
- * https://docs.orama.com/docs/orama-js/supported-languages/using-chinese-with-orama
+ * 2. The site is configured as English-only, so the default English tokenizer is enough.
  */
 const searchAPI = createI18nSearchAPI('advanced', {
   // Pass the i18n config for proper language detection
@@ -29,22 +26,8 @@ const searchAPI = createI18nSearchAPI('advanced', {
     }))
   ),
 
-  // Configure special language tokenizers and search options
+  // Configure search tokenizers
   localeMap: {
-    // Chinese configuration with Mandarin tokenizer
-    zh: {
-      components: {
-        tokenizer: createTokenizer(),
-      },
-      search: {
-        // Lower threshold for better matches with Chinese text
-        threshold: 0,
-        // Lower tolerance for better precision
-        tolerance: 0,
-      },
-    },
-
-    // Use the default English tokenizer for English content
     en: 'english',
   },
 
