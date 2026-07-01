@@ -3,12 +3,15 @@
 import { Button } from '@/components/ui/button';
 import { websiteConfig } from '@/config/website';
 import { useCreditBalance } from '@/hooks/use-credits';
+import { useMounted } from '@/hooks/use-mounted';
 import { useLocaleRouter } from '@/i18n/navigation';
 import { authClient } from '@/lib/auth-client';
 import { Routes } from '@/routes';
 import { CoinsIcon, Loader2Icon } from 'lucide-react';
 
 export function CreditsBalanceButton() {
+  const mounted = useMounted();
+
   // If credits are not enabled, return null
   if (!websiteConfig.credits.enableCredits) {
     return null;
@@ -26,6 +29,10 @@ export function CreditsBalanceButton() {
   const handleClick = () => {
     router.push(Routes.SettingsCredits);
   };
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <Button

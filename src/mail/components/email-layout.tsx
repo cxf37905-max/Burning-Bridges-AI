@@ -1,3 +1,4 @@
+import { websiteConfig } from '@/config/website';
 import type { BaseEmailProps } from '@/mail/types';
 import {
   Container,
@@ -29,9 +30,10 @@ export default function EmailLayout({
     locale,
     messages,
   });
+  const lang = websiteConfig.i18n.locales[locale]?.hreflang ?? locale;
 
   return (
-    <Html lang="en">
+    <Html lang={lang}>
       <Head>
         <Font
           fontFamily="Inter"

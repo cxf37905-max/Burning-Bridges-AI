@@ -2,6 +2,7 @@
 
 import { websiteConfig } from '@/config/website';
 import { useCreditBalance } from '@/hooks/use-credits';
+import { useMounted } from '@/hooks/use-mounted';
 import { useLocaleRouter } from '@/i18n/navigation';
 import { authClient } from '@/lib/auth-client';
 import { Routes } from '@/routes';
@@ -10,6 +11,7 @@ import { useTranslations } from 'next-intl';
 
 export function CreditsBalanceMenu() {
   const t = useTranslations('Marketing.avatar');
+  const mounted = useMounted();
   const router = useLocaleRouter();
 
   // Get user session for user ID
@@ -27,6 +29,10 @@ export function CreditsBalanceMenu() {
   const handleClick = () => {
     router.push(Routes.SettingsCredits);
   };
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <div

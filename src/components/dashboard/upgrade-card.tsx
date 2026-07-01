@@ -11,17 +11,19 @@ import {
 import { websiteConfig } from '@/config/website';
 import { useCurrentPlan } from '@/hooks/use-payment';
 import { LocaleLink } from '@/i18n/navigation';
-import { authClient } from '@/lib/auth-client';
 import { Routes } from '@/routes';
 import { SparklesIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-export function UpgradeCard() {
+interface UpgradeCardProps {
+  userId: string;
+}
+
+export function UpgradeCard({ userId }: UpgradeCardProps) {
   const t = useTranslations('Dashboard.upgrade');
   const [mounted, setMounted] = useState(false);
-  const { data: session } = authClient.useSession();
-  const { data: paymentData, isLoading } = useCurrentPlan(session?.user?.id);
+  const { data: paymentData, isLoading } = useCurrentPlan(userId);
 
   useEffect(() => {
     setMounted(true);

@@ -1,5 +1,5 @@
 import { websiteConfig } from '@/config/website';
-import { getTemplate } from '@/mail';
+import { getTemplate } from '@/mail/template';
 import type {
   MailProvider,
   SendEmailResult,

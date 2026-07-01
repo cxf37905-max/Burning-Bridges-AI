@@ -79,12 +79,36 @@ export class S3Provider implements StorageProvider {
   }
 
   /**
-   * Generate a unique filename with the original extension
+   * Generate a unique filename with a safe original extension.
    */
   private generateUniqueFilename(originalFilename: string): string {
-    const extension = originalFilename.split('.').pop() || '';
+    const extension = originalFilename.split('.').pop()?.toLowerCase();
+    const safeExtension =
+      extension && /^[a-z0-9]{1,16}$/.test(extension) ? extension : '';
     const uuid = randomUUID();
-    return `${uuid}${extension ? `.${extension}` : ''}`;
+    return `${uuid}${safeExtension ? `.${safeExtension}` : ''}`;
+  }
+
+  /**
+   * Normalize a folder path into safe S3 key segments.
+   */
+  private sanitizeFolder(folder?: string): string | undefined {
+    if (!folder) {
+      return undefined;
+    }
+
+    const segments = folder
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (segments.length === 0) {
+      return undefined;
+    }
+
+    return segments
+      .map((segment) => segment.replace(/[^a-zA-Z0-9._-]/g, '-'))
+      .join('/');
   }
 
   /**
@@ -94,10 +118,12 @@ export class S3Provider implements StorageProvider {
     try {
       const { file, filename, contentType, folder } = params;
       const s3 = this.getS3Client();
-      const { bucketName } = this.config;
 
       const uniqueFilename = this.generateUniqueFilename(filename);
-      const key = folder ? `${folder}/${uniqueFilename}` : uniqueFilename;
+      const sanitizedFolder = this.sanitizeFolder(folder);
+      const key = sanitizedFolder
+        ? `${sanitizedFolder}/${uniqueFilename}`
+        : uniqueFilename;
 
       // Convert Blob to Buffer if needed
       let fileContent: Buffer | string;

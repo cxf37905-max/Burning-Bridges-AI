@@ -36,7 +36,7 @@ export default async function DashboardLayout({ children }: PropsWithChildren) {
         } as React.CSSProperties
       }
     >
-      <DashboardSidebar variant="inset" />
+      <DashboardSidebar user={session.user} variant="inset" />
 
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>

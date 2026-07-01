@@ -34,7 +34,6 @@ export function UpdateAvatarCard({ className }: UpdateAvatarCardProps) {
   const [error, setError] = useState<string | undefined>('');
   const { data: session, refetch } = authClient.useSession();
   const [avatarUrl, setAvatarUrl] = useState('');
-  const [tempAvatarUrl, setTempAvatarUrl] = useState('');
 
   useEffect(() => {
     if (session?.user?.image) {
@@ -72,6 +71,7 @@ export function UpdateAvatarCard({ className }: UpdateAvatarCardProps) {
   const handleFileUpload = async (file: File) => {
     setIsUploading(true);
     setError('');
+    let tempUrl: string | undefined;
 
     try {
       // Pre-check file size on client side
@@ -80,8 +80,7 @@ export function UpdateAvatarCard({ className }: UpdateAvatarCardProps) {
       }
 
       // Create a temporary URL for preview and store the original URL
-      const tempUrl = URL.createObjectURL(file);
-      setTempAvatarUrl(tempUrl);
+      tempUrl = URL.createObjectURL(file);
       // Show temporary avatar immediately for better UX
       setAvatarUrl(tempUrl);
 
@@ -134,9 +133,8 @@ export function UpdateAvatarCard({ className }: UpdateAvatarCardProps) {
     } finally {
       setIsUploading(false);
       // Clean up temporary URL
-      if (tempAvatarUrl) {
-        URL.revokeObjectURL(tempAvatarUrl);
-        setTempAvatarUrl('');
+      if (tempUrl) {
+        URL.revokeObjectURL(tempUrl);
       }
     }
   };

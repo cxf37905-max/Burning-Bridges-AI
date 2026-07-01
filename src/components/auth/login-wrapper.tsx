@@ -41,10 +41,10 @@ export const LoginWrapper = ({
     router.push(loginPath);
   };
 
-  // this is to prevent the login wrapper from being rendered on the server side
-  // and causing a hydration error
+  // Keep the trigger markup stable during hydration. Once mounted, enhance it
+  // with dialog or redirect behavior.
   if (!mounted) {
-    return null;
+    return <>{children}</>;
   }
 
   if (mode === 'modal') {
