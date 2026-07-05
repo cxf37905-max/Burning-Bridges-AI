@@ -11,25 +11,62 @@ import {
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { websiteConfig } from '@/config/website';
-import { useCreditBalance, useCreditStats } from '@/hooks/use-credits';
+import {
+  creditsKeys,
+  useCreditBalance,
+  useCreditPurchaseSync,
+  useCreditStats,
+} from '@/hooks/use-credits';
 import { useMounted } from '@/hooks/use-mounted';
 import { authClient } from '@/lib/auth-client';
-import { CREDITS_EXPIRATION_DAYS } from '@/lib/constants';
+import {
+  CREDITS_EXPIRATION_DAYS,
+  PAYMENT_MAX_POLL_TIME,
+  PAYMENT_POLL_INTERVAL,
+} from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { RefreshCwIcon } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ClockIcon, RefreshCwIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+interface CreditsCardProps {
+  paymentSyncId?: string | null;
+}
+
+type PaymentSyncStatus = 'checking' | 'refreshing' | 'timeout' | 'finished';
 
 /**
  * Credits card, show credits balance and statistics
  */
-export default function CreditsCard() {
+export default function CreditsCard({
+  paymentSyncId = null,
+}: CreditsCardProps) {
   const t = useTranslations('Dashboard.settings.credits.balance');
   const mounted = useMounted();
+  const queryClient = useQueryClient();
+  const syncId = paymentSyncId ?? '';
+  const canCheckPaymentSync = Boolean(syncId);
+  const [paymentSyncStatus, setPaymentSyncStatus] =
+    useState<PaymentSyncStatus>('checking');
 
   // Get user session for user ID
   const { data: session } = authClient.useSession();
   const currentUser = session?.user;
+  const shouldPollPaymentSync =
+    canCheckPaymentSync && paymentSyncStatus === 'checking';
+  const syncQueryOptions: {
+    enabled: boolean;
+    refetchInterval: number | false;
+  } = {
+    enabled: shouldPollPaymentSync,
+    refetchInterval: shouldPollPaymentSync ? PAYMENT_POLL_INTERVAL : false,
+  };
+  const { data: isCreditPurchaseSynced = false } = useCreditPurchaseSync(
+    currentUser?.id,
+    canCheckPaymentSync ? syncId : '',
+    syncQueryOptions
+  );
 
   // Use TanStack Query hooks for credits
   const {
@@ -37,7 +74,9 @@ export default function CreditsCard() {
     isLoading: isLoadingBalance,
     error: balanceError,
     refetch: refetchBalance,
-  } = useCreditBalance(currentUser?.id);
+  } = useCreditBalance(currentUser?.id, {
+    enabled: !canCheckPaymentSync,
+  });
 
   // TanStack Query hook for credit statistics
   const {
@@ -45,7 +84,14 @@ export default function CreditsCard() {
     isLoading: isLoadingStats,
     error: statsError,
     refetch: refetchStats,
-  } = useCreditStats(currentUser?.id);
+  } = useCreditStats(currentUser?.id, {
+    enabled: !canCheckPaymentSync,
+  });
+  const showPaymentSyncing =
+    canCheckPaymentSync &&
+    (paymentSyncStatus === 'checking' || paymentSyncStatus === 'refreshing');
+  const showPaymentSyncDelayed =
+    canCheckPaymentSync && paymentSyncStatus === 'timeout';
 
   // Retry all data fetching using refetch methods
   const handleRetry = useCallback(() => {
@@ -54,13 +100,81 @@ export default function CreditsCard() {
     refetchStats();
   }, [refetchBalance, refetchStats]);
 
+  const clearPaymentSyncParams = useCallback(() => {
+    const url = new URL(window.location.href);
+    for (const param of ['payment', 'syncId', 'package', 'credits', 'since']) {
+      url.searchParams.delete(param);
+    }
+
+    window.history.replaceState(
+      null,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
+  }, []);
+
+  useEffect(() => {
+    setPaymentSyncStatus('checking');
+  }, [syncId]);
+
+  useEffect(() => {
+    if (!canCheckPaymentSync || paymentSyncStatus !== 'checking') {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPaymentSyncStatus('timeout');
+      clearPaymentSyncParams();
+    }, PAYMENT_MAX_POLL_TIME);
+
+    return () => window.clearTimeout(timer);
+  }, [canCheckPaymentSync, clearPaymentSyncParams, paymentSyncStatus, syncId]);
+
+  useEffect(() => {
+    if (!isCreditPurchaseSynced) {
+      return;
+    }
+
+    let canceled = false;
+    setPaymentSyncStatus('refreshing');
+
+    void Promise.all([refetchBalance(), refetchStats()]).finally(() => {
+      if (canceled) {
+        return;
+      }
+
+      if (currentUser?.id) {
+        void queryClient.invalidateQueries({
+          queryKey: creditsKeys.transactions(currentUser.id),
+        });
+      }
+
+      setPaymentSyncStatus('finished');
+      clearPaymentSyncParams();
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [
+    currentUser?.id,
+    clearPaymentSyncParams,
+    isCreditPurchaseSynced,
+    queryClient,
+    refetchBalance,
+    refetchStats,
+  ]);
+
   // Don't render if credits are disabled
   if (!websiteConfig.credits.enableCredits) {
     return null;
   }
 
   // Render loading skeleton
-  if (!mounted || isLoadingBalance || isLoadingStats) {
+  if (
+    !mounted ||
+    (!canCheckPaymentSync && (isLoadingBalance || isLoadingStats))
+  ) {
     return (
       <Card className={cn('w-full overflow-hidden pt-6 pb-0 flex flex-col')}>
         <CardHeader>
@@ -102,13 +216,53 @@ export default function CreditsCard() {
     );
   }
 
+  if (showPaymentSyncing || showPaymentSyncDelayed) {
+    return (
+      <Card className={cn('w-full overflow-hidden pt-6 pb-0 flex flex-col')}>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">{t('title')}</CardTitle>
+          <CardDescription>{t('description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex-1 space-y-4">
+          {showPaymentSyncing && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <RefreshCwIcon className="mt-0.5 size-4 shrink-0 animate-spin" />
+              <span>{t('paymentSyncing')}</span>
+            </div>
+          )}
+
+          {showPaymentSyncDelayed && (
+            <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+              <ClockIcon className="mt-0.5 size-4 shrink-0" />
+              <span>{t('paymentSyncDelayed')}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className={cn('w-full overflow-hidden pt-6 pb-0 flex flex-col')}>
       <CardHeader>
         <CardTitle className="text-lg font-semibold">{t('title')}</CardTitle>
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1">
+      <CardContent className="flex-1 space-y-4">
+        {showPaymentSyncing && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            <RefreshCwIcon className="mt-0.5 size-4 shrink-0 animate-spin" />
+            <span>{t('paymentSyncing')}</span>
+          </div>
+        )}
+
+        {showPaymentSyncDelayed && (
+          <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+            <ClockIcon className="mt-0.5 size-4 shrink-0" />
+            <span>{t('paymentSyncDelayed')}</span>
+          </div>
+        )}
+
         {/* Credits balance */}
         <div className="flex items-center justify-start space-x-4">
           <div className="flex items-center space-x-2">

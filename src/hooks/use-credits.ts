@@ -1,4 +1,5 @@
 import { consumeCreditsAction } from '@/actions/consume-credits';
+import { checkPaymentSyncAction } from '@/actions/check-payment-sync';
 import { getCreditBalanceAction } from '@/actions/get-credit-balance';
 import { getCreditStatsAction } from '@/actions/get-credit-stats';
 import { getCreditTransactionsAction } from '@/actions/get-credit-transactions';
@@ -16,11 +17,18 @@ interface SimpleFilter {
   value: string;
 }
 
+type CreditQueryOptions = {
+  enabled?: boolean;
+  refetchInterval?: number | false;
+};
+
 // Query keys
 export const creditsKeys = {
   all: ['credits'] as const,
   balance: (userId: string) => [...creditsKeys.all, 'balance', userId] as const,
   stats: (userId: string) => [...creditsKeys.all, 'stats', userId] as const,
+  purchaseSync: (userId: string, syncId: string) =>
+    [...creditsKeys.all, 'purchaseSync', userId, syncId] as const,
   transactions: (userId: string) =>
     [...creditsKeys.all, 'transactions', userId] as const,
   transactionsList: (
@@ -36,7 +44,10 @@ export const creditsKeys = {
 };
 
 // Hook to fetch credit balance
-export function useCreditBalance(userId: string | undefined) {
+export function useCreditBalance(
+  userId: string | undefined,
+  options?: CreditQueryOptions
+) {
   return useQuery({
     queryKey: creditsKeys.balance(userId || ''),
     queryFn: async () => {
@@ -54,12 +65,16 @@ export function useCreditBalance(userId: string | undefined) {
       console.log('Credit balance fetched:', result.data.credits);
       return result.data.credits || 0;
     },
-    enabled: !!userId,
+    enabled: !!userId && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
 // Hook to fetch credit statistics
-export function useCreditStats(userId: string | undefined) {
+export function useCreditStats(
+  userId: string | undefined,
+  options?: CreditQueryOptions
+) {
   return useQuery({
     queryKey: creditsKeys.stats(userId || ''),
     queryFn: async () => {
@@ -75,7 +90,35 @@ export function useCreditStats(userId: string | undefined) {
       console.log('Credit stats fetched:', result.data.data);
       return result.data.data;
     },
-    enabled: !!userId,
+    enabled: !!userId && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+
+export function useCreditPurchaseSync(
+  userId: string | undefined,
+  syncId: string,
+  options?: CreditQueryOptions
+) {
+  return useQuery({
+    queryKey: creditsKeys.purchaseSync(userId || '', syncId),
+    queryFn: async () => {
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+
+      const result = await checkPaymentSyncAction({ syncId });
+      if (!result?.data?.success) {
+        console.log('useCreditPurchaseSync error:', result?.data?.error);
+        throw new Error(
+          result?.data?.error || 'Failed to check credit purchase sync'
+        );
+      }
+
+      return result.data.synced;
+    },
+    enabled: !!userId && !!syncId && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 

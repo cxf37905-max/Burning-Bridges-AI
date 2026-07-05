@@ -14,27 +14,50 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePricePlans } from '@/config/price-config';
 import { useMounted } from '@/hooks/use-mounted';
-import { useCurrentPlan } from '@/hooks/use-payment';
+import { useBillingPaymentSync, useCurrentPlan } from '@/hooks/use-payment';
 import { LocaleLink } from '@/i18n/navigation';
 import { authClient } from '@/lib/auth-client';
+import { PAYMENT_MAX_POLL_TIME, PAYMENT_POLL_INTERVAL } from '@/lib/constants';
 import { formatDate } from '@/lib/formatter';
 import { cn } from '@/lib/utils';
 import { Routes } from '@/routes';
 import { CheckCircleIcon, ClockIcon, RefreshCwIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+interface BillingCardProps {
+  paymentSyncId?: string | null;
+}
+
+type PaymentSyncStatus = 'checking' | 'refreshing' | 'timeout' | 'finished';
 
 /**
  * Billing card, show current plan and subscription status
  */
-export default function BillingCard() {
+export default function BillingCard({
+  paymentSyncId = null,
+}: BillingCardProps) {
   const t = useTranslations('Dashboard.settings.billing');
   const mounted = useMounted();
+  const syncId = paymentSyncId ?? '';
+  const canCheckPaymentSync = Boolean(syncId);
+  const [paymentSyncStatus, setPaymentSyncStatus] =
+    useState<PaymentSyncStatus>('checking');
+  const shouldPollPaymentSync =
+    canCheckPaymentSync && paymentSyncStatus === 'checking';
 
   // Get user session for customer ID
   const { data: session, isPending: isLoadingSession } =
     authClient.useSession();
   const currentUser = session?.user;
+  const { data: isBillingPaymentSynced = false } = useBillingPaymentSync(
+    currentUser?.id,
+    canCheckPaymentSync ? syncId : '',
+    {
+      enabled: shouldPollPaymentSync,
+      refetchInterval: shouldPollPaymentSync ? PAYMENT_POLL_INTERVAL : false,
+    }
+  );
 
   // Get current plan data
   const {
@@ -42,11 +65,18 @@ export default function BillingCard() {
     isLoading: isLoadingPayment,
     error: loadPaymentError,
     refetch: refetchPayment,
-  } = useCurrentPlan(currentUser?.id);
+  } = useCurrentPlan(currentUser?.id, {
+    enabled: !canCheckPaymentSync,
+  });
 
   const currentPlan = paymentData?.currentPlan;
   const subscription = paymentData?.subscription;
   const isLifetimeMember = currentPlan?.isLifetime || false;
+  const showPaymentSyncing =
+    canCheckPaymentSync &&
+    (paymentSyncStatus === 'checking' || paymentSyncStatus === 'refreshing');
+  const showPaymentSyncDelayed =
+    canCheckPaymentSync && paymentSyncStatus === 'timeout';
 
   // Get price plans with translations - must be called here to maintain hook order
   const pricePlans = usePricePlans();
@@ -78,8 +108,64 @@ export default function BillingCard() {
     refetchPayment();
   }, [refetchPayment]);
 
+  const clearPaymentSyncParams = useCallback(() => {
+    const url = new URL(window.location.href);
+    for (const param of ['payment', 'syncId']) {
+      url.searchParams.delete(param);
+    }
+
+    window.history.replaceState(
+      null,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
+  }, []);
+
+  useEffect(() => {
+    setPaymentSyncStatus('checking');
+  }, [syncId]);
+
+  useEffect(() => {
+    if (!canCheckPaymentSync || paymentSyncStatus !== 'checking') {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPaymentSyncStatus('timeout');
+      clearPaymentSyncParams();
+    }, PAYMENT_MAX_POLL_TIME);
+
+    return () => window.clearTimeout(timer);
+  }, [canCheckPaymentSync, clearPaymentSyncParams, paymentSyncStatus, syncId]);
+
+  useEffect(() => {
+    if (!isBillingPaymentSynced) {
+      return;
+    }
+
+    let canceled = false;
+    setPaymentSyncStatus('refreshing');
+
+    void refetchPayment().finally(() => {
+      if (canceled) {
+        return;
+      }
+
+      setPaymentSyncStatus('finished');
+      clearPaymentSyncParams();
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [clearPaymentSyncParams, isBillingPaymentSynced, refetchPayment]);
+
   // Render loading skeleton
-  if (!mounted || isLoadingPayment || isLoadingSession) {
+  if (
+    !mounted ||
+    isLoadingSession ||
+    (!canCheckPaymentSync && isLoadingPayment)
+  ) {
     return (
       <Card className={cn('w-full overflow-hidden pt-6 pb-0 flex flex-col')}>
         <CardHeader>
@@ -128,6 +214,37 @@ export default function BillingCard() {
     );
   }
 
+  if (
+    !currentPlanWithTranslations &&
+    (showPaymentSyncing || showPaymentSyncDelayed)
+  ) {
+    return (
+      <Card className={cn('w-full overflow-hidden pt-6 pb-0 flex flex-col')}>
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">
+            {t('currentPlan.title')}
+          </CardTitle>
+          <CardDescription>{t('currentPlan.description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 flex-1">
+          {showPaymentSyncing && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <RefreshCwIcon className="mt-0.5 size-4 shrink-0 animate-spin" />
+              <span>{t('paymentSyncing')}</span>
+            </div>
+          )}
+
+          {showPaymentSyncDelayed && (
+            <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+              <ClockIcon className="mt-0.5 size-4 shrink-0" />
+              <span>{t('paymentSyncDelayed')}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   // currentPlan maybe null, so we need to check if it is null
   if (!currentPlanWithTranslations) {
     return (
@@ -161,6 +278,20 @@ export default function BillingCard() {
         <CardDescription>{t('currentPlan.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 flex-1">
+        {showPaymentSyncing && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+            <RefreshCwIcon className="mt-0.5 size-4 shrink-0 animate-spin" />
+            <span>{t('paymentSyncing')}</span>
+          </div>
+        )}
+
+        {showPaymentSyncDelayed && (
+          <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+            <ClockIcon className="mt-0.5 size-4 shrink-0" />
+            <span>{t('paymentSyncDelayed')}</span>
+          </div>
+        )}
+
         {/* Plan name and status */}
         <div className="flex items-center justify-start space-x-4">
           <div className="text-3xl font-medium">

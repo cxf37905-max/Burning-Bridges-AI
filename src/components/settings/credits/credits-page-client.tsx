@@ -23,7 +23,11 @@ import { useEffect, useMemo, useRef } from 'react';
 /**
  * Credits page client, show credit balance and transactions
  */
-export default function CreditsPageClient() {
+export default function CreditsPageClient({
+  paymentSyncId = null,
+}: {
+  paymentSyncId?: string | null;
+}) {
   const t = useTranslations('Dashboard.settings.credits');
 
   // Get user session for user ID
@@ -165,7 +169,7 @@ export default function CreditsPageClient() {
         <TabsContent value="balance" className="mt-4 flex flex-col gap-8">
           {/* Credits Balance Card */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <CreditsCard />
+            <CreditsCard paymentSyncId={paymentSyncId} />
           </div>
 
           {/* Credit Packages */}

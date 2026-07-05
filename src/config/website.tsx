@@ -105,7 +105,7 @@ export const websiteConfig: WebsiteConfig = {
   mail: {
     enable: true,
     provider: 'resend',
-    fromEmail: 'MkSaaS <support@example.com>',
+    fromEmail: 'MkSaaS <onboarding@resend.dev>',
     supportEmail: 'MkSaaS <support@example.com>',
   },
   newsletter: {

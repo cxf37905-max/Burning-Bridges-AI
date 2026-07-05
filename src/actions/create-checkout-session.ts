@@ -7,6 +7,7 @@ import { getUrlWithLocale } from '@/lib/urls';
 import { createCheckout } from '@/payment';
 import type { CreateCheckoutParams } from '@/payment/types';
 import { Routes } from '@/routes';
+import { randomUUID } from 'crypto';
 import { getLocale } from 'next-intl/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
@@ -43,10 +44,12 @@ export const createCheckoutAction = userActionClient
       }
 
       // Add user id to metadata, so we can get it in the webhook event
+      const paymentSyncId = randomUUID();
       const customMetadata: Record<string, string> = {
         ...metadata,
         userId: currentUser.id,
         userName: currentUser.name,
+        paymentSyncId: paymentSyncId,
       };
 
       // https://datafa.st/docs/stripe-checkout-api
@@ -66,7 +69,10 @@ export const createCheckoutAction = userActionClient
       //   payment confirmation page, so redirect straight to billing.
       const isCreem = websiteConfig.payment.provider === 'creem';
       const successUrl = isCreem
-        ? getUrlWithLocale(Routes.SettingsBilling, locale)
+        ? getUrlWithLocale(
+            `${Routes.SettingsBilling}?payment=syncing&syncId=${encodeURIComponent(paymentSyncId)}`,
+            locale
+          )
         : getUrlWithLocale(
             `${Routes.Payment}?session_id={CHECKOUT_SESSION_ID}&callback=${Routes.SettingsBilling}`,
             locale

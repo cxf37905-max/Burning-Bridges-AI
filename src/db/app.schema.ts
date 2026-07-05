@@ -13,6 +13,8 @@ export const payment = pgTable("payment", {
 	subscriptionId: text('subscription_id'),
 	sessionId: text('session_id'),
 	invoiceId: text('invoice_id').unique(), // unique constraint for avoiding duplicate processing
+	paymentSyncId: text('payment_sync_id'),
+	webhookProcessedAt: timestamp('webhook_processed_at'),
 	status: text('status').notNull().$type<PaymentStatus>(),
 	paid: boolean('paid').notNull().default(false), // indicates whether payment is completed (set in invoice.paid event)
 	periodStart: timestamp('period_start'),
@@ -33,6 +35,7 @@ export const payment = pgTable("payment", {
 	paymentSubscriptionIdIdx: index("payment_subscription_id_idx").on(table.subscriptionId),
 	paymentSessionIdIdx: index("payment_session_id_idx").on(table.sessionId),
 	paymentInvoiceIdIdx: index("payment_invoice_id_idx").on(table.invoiceId),
+	paymentSyncIdIdx: index("payment_sync_id_idx").on(table.paymentSyncId),
 }));
 
 export const userCredit = pgTable("user_credit", {

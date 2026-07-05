@@ -846,6 +846,7 @@ export class CreemProvider implements PaymentProvider {
 
     const { object } = event;
     const currentDate = new Date();
+    const paymentSyncId = this.extractPaymentSyncId(object);
 
     try {
       const db = await getDb();
@@ -857,6 +858,8 @@ export class CreemProvider implements PaymentProvider {
         subscriptionId: null,
         sessionId: event.id,
         invoiceId: event.id,
+        paymentSyncId: paymentSyncId ?? null,
+        webhookProcessedAt: null,
         type: PaymentTypes.ONE_TIME,
         scene: PaymentScenes.LIFETIME,
         interval: null,
@@ -889,6 +892,7 @@ export class CreemProvider implements PaymentProvider {
         amount,
       });
 
+      await this.markCheckoutPaymentProcessed(paymentSyncId);
       console.log('<< Created Creem one-time payment record success');
     } catch (error) {
       if (
@@ -917,6 +921,7 @@ export class CreemProvider implements PaymentProvider {
     const metadata = (object.metadata ?? {}) as Record<string, unknown>;
     const packageId = metadata.packageId as string | undefined;
     const credits = metadata.credits as string | undefined;
+    const paymentSyncId = this.extractPaymentSyncId(object);
 
     try {
       const db = await getDb();
@@ -928,6 +933,8 @@ export class CreemProvider implements PaymentProvider {
         subscriptionId: null,
         sessionId: event.id,
         invoiceId: event.id,
+        paymentSyncId: paymentSyncId ?? null,
+        webhookProcessedAt: null,
         type: PaymentTypes.ONE_TIME,
         scene: PaymentScenes.CREDIT,
         interval: null,
@@ -962,6 +969,7 @@ export class CreemProvider implements PaymentProvider {
         console.warn('<< Missing packageId or credits in metadata');
       }
 
+      await this.markCheckoutPaymentProcessed(paymentSyncId);
       console.log('<< Created Creem credit payment record success');
     } catch (error) {
       if (
@@ -989,6 +997,7 @@ export class CreemProvider implements PaymentProvider {
     const currentDate = new Date();
     const sub = object.subscription;
     const subscriptionId = sub?.id ?? null;
+    const paymentSyncId = this.extractPaymentSyncId(object);
     const periodStart = sub?.currentPeriodStartDate
       ? new Date(sub.currentPeriodStartDate)
       : null;
@@ -1010,6 +1019,8 @@ export class CreemProvider implements PaymentProvider {
         subscriptionId,
         sessionId: event.id,
         invoiceId: event.id,
+        paymentSyncId: paymentSyncId ?? null,
+        webhookProcessedAt: null,
         type: PaymentTypes.SUBSCRIPTION,
         scene: PaymentScenes.SUBSCRIPTION,
         interval,
@@ -1031,6 +1042,7 @@ export class CreemProvider implements PaymentProvider {
         console.log('Added initial subscription credits for user:', userId);
       }
 
+      await this.markCheckoutPaymentProcessed(paymentSyncId);
       console.log('<< Created Creem subscription payment record success');
     } catch (error) {
       if (
@@ -1055,6 +1067,37 @@ export class CreemProvider implements PaymentProvider {
     object: WebhookCheckoutObject
   ): string | undefined {
     return (object.metadata?.userId as string) || undefined;
+  }
+
+  private extractPaymentSyncId(
+    object: WebhookCheckoutObject
+  ): string | undefined {
+    return (object.metadata?.paymentSyncId as string) || undefined;
+  }
+
+  private async markCheckoutPaymentProcessed(
+    paymentSyncId: string | undefined
+  ): Promise<void> {
+    if (!paymentSyncId) {
+      return;
+    }
+
+    const db = await getDb();
+    const updated = await db
+      .update(payment)
+      .set({
+        webhookProcessedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(payment.paymentSyncId, paymentSyncId))
+      .returning({ id: payment.id });
+
+    if (updated.length === 0) {
+      console.warn(
+        '<< No payment record found for payment sync ID:',
+        paymentSyncId
+      );
+    }
   }
 
   /**

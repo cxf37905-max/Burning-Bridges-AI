@@ -7,6 +7,7 @@ import { getUrlWithLocale } from '@/lib/urls';
 import { createCreditCheckout } from '@/payment';
 import type { CreateCreditCheckoutParams } from '@/payment/types';
 import { Routes } from '@/routes';
+import { randomUUID } from 'crypto';
 import { getLocale } from 'next-intl/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
@@ -43,6 +44,7 @@ export const createCreditCheckoutSession = userActionClient
       }
 
       // Add metadata to identify this as a credit purchase
+      const paymentSyncId = randomUUID();
       const customMetadata: Record<string, string> = {
         ...metadata,
         type: 'credit_purchase',
@@ -50,6 +52,7 @@ export const createCreditCheckoutSession = userActionClient
         credits: creditPackage.amount.toString(),
         userId: currentUser.id,
         userName: currentUser.name,
+        paymentSyncId: paymentSyncId,
       };
 
       // https://datafa.st/docs/stripe-checkout-api
@@ -69,7 +72,10 @@ export const createCreditCheckoutSession = userActionClient
       //   payment confirmation page, so redirect straight to credits.
       const isCreem = websiteConfig.payment.provider === 'creem';
       const successUrl = isCreem
-        ? getUrlWithLocale(Routes.SettingsCredits, locale)
+        ? getUrlWithLocale(
+            `${Routes.SettingsCredits}?payment=syncing&syncId=${encodeURIComponent(paymentSyncId)}`,
+            locale
+          )
         : getUrlWithLocale(
             `${Routes.Payment}?session_id={CHECKOUT_SESSION_ID}&callback=${Routes.SettingsCredits}`,
             locale
