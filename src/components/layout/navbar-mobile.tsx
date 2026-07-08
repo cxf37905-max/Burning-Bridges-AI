@@ -15,7 +15,6 @@ import { LocaleLink, useLocalePathname } from '@/i18n/navigation';
 import { authClient } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
 import { Routes } from '@/routes';
-import { LoginWrapper } from '@/components/auth/login-wrapper';
 import {
   ArrowUpRightIcon,
   ChevronRightIcon,
@@ -96,17 +95,14 @@ export function NavbarMobile({ className, ...props }: NavbarMobileProps) {
           <div className="flex flex-1 flex-col items-start gap-4 p-4">
             {!currentUser && (
               <div className="flex w-full flex-col gap-4">
-                <LoginWrapper mode="redirect" asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="w-full"
+                <Button asChild variant="outline" size="lg" className="w-full">
+                  <LocaleLink
+                    href={Routes.Login}
                     onClick={() => setOpen(false)}
                   >
                     {t('Common.login')}
-                  </Button>
-                </LoginWrapper>
+                  </LocaleLink>
+                </Button>
                 <LocaleLink
                   href={Routes.Register}
                   onClick={() => setOpen(false)}

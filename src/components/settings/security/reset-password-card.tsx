@@ -9,9 +9,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useLocaleRouter } from '@/i18n/navigation';
+import { LocaleLink } from '@/i18n/navigation';
 import { authClient } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
+import { Routes } from '@/routes';
 import { useTranslations } from 'next-intl';
 
 interface ResetPasswordCardProps {
@@ -38,19 +39,10 @@ interface ResetPasswordCardProps {
  */
 export function ResetPasswordCard({ className }: ResetPasswordCardProps) {
   const t = useTranslations('Dashboard.settings.security.resetPassword');
-  const router = useLocaleRouter();
   const { data: session } = authClient.useSession();
-
-  const handleSetupPassword = () => {
-    // Pre-fill the email if available to make it easier for the user
-    if (session?.user?.email) {
-      router.push(
-        `/auth/forgot-password?email=${encodeURIComponent(session.user.email)}`
-      );
-    } else {
-      router.push('/auth/forgot-password');
-    }
-  };
+  const setupPasswordHref = session?.user?.email
+    ? `${Routes.ForgotPassword}?email=${encodeURIComponent(session.user.email)}`
+    : Routes.ForgotPassword;
 
   return (
     <Card
@@ -67,7 +59,9 @@ export function ResetPasswordCard({ className }: ResetPasswordCardProps) {
         <p className="text-sm text-muted-foreground">{t('info')}</p>
       </CardContent>
       <CardFooter className="mt-auto px-6 py-4 flex justify-end items-center bg-muted rounded-none">
-        <Button onClick={handleSetupPassword}>{t('button')}</Button>
+        <Button asChild>
+          <LocaleLink href={setupPasswordHref}>{t('button')}</LocaleLink>
+        </Button>
       </CardFooter>
     </Card>
   );

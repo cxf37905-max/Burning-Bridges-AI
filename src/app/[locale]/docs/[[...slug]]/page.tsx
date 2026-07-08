@@ -3,11 +3,6 @@ import { getMDXComponents } from '@/components/docs/mdx-components';
 import { LLMCopyButton, ViewOptions } from '@/components/docs/page-actions';
 import { PremiumBadge } from '@/components/premium/premium-badge';
 import { PremiumGuard } from '@/components/premium/premium-guard';
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
 import { LOCALES } from '@/i18n/routing';
 import { constructMetadata } from '@/lib/metadata';
 import { source } from '@/lib/source';
@@ -136,29 +131,13 @@ export default async function DocPage({ params }: DocPageProps) {
                 [key: string]: any;
               }) => {
                 const found = source.getPageByHref(href ?? '');
+                const resolvedHref = found
+                  ? found.hash
+                    ? `${found.page.url}#${found.hash}`
+                    : found.page.url
+                  : href;
 
-                if (!found) return <Link href={href} {...props} />;
-
-                return (
-                  <HoverCard>
-                    <HoverCardTrigger asChild>
-                      <Link
-                        href={
-                          found.hash
-                            ? `${found.page.url}#${found.hash}`
-                            : found.page.url
-                        }
-                        {...props}
-                      />
-                    </HoverCardTrigger>
-                    <HoverCardContent className="text-sm">
-                      <p className="font-medium">{found.page.data.title}</p>
-                      <p className="text-fd-muted-foreground">
-                        {found.page.data.description}
-                      </p>
-                    </HoverCardContent>
-                  </HoverCard>
-                );
+                return <Link href={resolvedHref} {...props} />;
               },
             })}
           />

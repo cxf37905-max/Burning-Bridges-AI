@@ -1,18 +1,28 @@
 'use client';
 
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { websiteConfig } from '@/config/website';
 import { useCreditBalance } from '@/hooks/use-credits';
 import { useMounted } from '@/hooks/use-mounted';
-import { useLocaleRouter } from '@/i18n/navigation';
+import { LocaleLink } from '@/i18n/navigation';
 import { authClient } from '@/lib/auth-client';
 import { Routes } from '@/routes';
 import { CoinsIcon, Loader2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { MouseEvent } from 'react';
 
-export function CreditsBalanceMenu() {
+interface CreditsBalanceMenuProps {
+  onNavigateStart?: (
+    href: string,
+    event: MouseEvent<HTMLAnchorElement>
+  ) => void;
+}
+
+export function CreditsBalanceMenu({
+  onNavigateStart,
+}: CreditsBalanceMenuProps) {
   const t = useTranslations('Marketing.avatar');
   const mounted = useMounted();
-  const router = useLocaleRouter();
 
   // Get user session for user ID
   const { data: session } = authClient.useSession();
@@ -26,30 +36,29 @@ export function CreditsBalanceMenu() {
     return null;
   }
 
-  const handleClick = () => {
-    router.push(Routes.SettingsCredits);
-  };
-
   if (!mounted) {
     return null;
   }
 
   return (
-    <div
-      className="flex w-full items-center justify-between"
-      onClick={handleClick}
-    >
-      <div className="flex items-center gap-2">
-        <CoinsIcon className="size-4" />
-        <span className="text-sm">{t('credits')}</span>
-      </div>
-      <span className="text-sm font-medium">
-        {isLoading ? (
-          <Loader2Icon className="size-4 animate-spin" />
-        ) : (
-          balance.toLocaleString()
-        )}
-      </span>
-    </div>
+    <DropdownMenuItem asChild onSelect={(event) => event.preventDefault()}>
+      <LocaleLink
+        href={Routes.SettingsCredits}
+        className="flex w-full items-center justify-between"
+        onClick={(event) => onNavigateStart?.(Routes.SettingsCredits, event)}
+      >
+        <div className="flex items-center gap-2">
+          <CoinsIcon className="size-4" />
+          <span className="text-sm">{t('credits')}</span>
+        </div>
+        <span className="text-sm font-medium">
+          {isLoading ? (
+            <Loader2Icon className="size-4 animate-spin" />
+          ) : (
+            balance.toLocaleString()
+          )}
+        </span>
+      </LocaleLink>
+    </DropdownMenuItem>
   );
 }

@@ -9,7 +9,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { useLocalePathname, useLocaleRouter } from '@/i18n/navigation';
+import { useLocalePathname } from '@/i18n/navigation';
 
 function getCurrentPageFromPath(pathname: string): number {
   const match = pathname.match(/\/page\/(\d+)$/);
@@ -28,19 +28,17 @@ export default function CustomPagination({
   totalPages,
   routePrefix,
 }: CustomPaginationProps) {
-  const router = useLocaleRouter();
   const pathname = useLocalePathname();
   const currentPage = getCurrentPageFromPath(pathname);
 
-  const handlePageChange = (page: number | string) => {
+  const getPageHref = (page: number | string) => {
     const pageNum = Number(page);
     if (pageNum === 1) {
       // Go to /blog or /blog/category/[slug] for page 1
-      router.push(routePrefix);
-    } else {
-      // Go to /blog/page/x or /blog/category/[slug]/page/x
-      router.push(`${routePrefix}/page/${pageNum}`);
+      return routePrefix;
     }
+    // Go to /blog/page/x or /blog/category/[slug]/page/x
+    return `${routePrefix}/page/${pageNum}`;
   };
 
   const allPages = generatePagination(currentPage, totalPages);
@@ -50,11 +48,7 @@ export default function CustomPagination({
       <PaginationContent>
         <PaginationItem>
           <PaginationPrevious
-            onClick={
-              currentPage > 1
-                ? () => handlePageChange(currentPage - 1)
-                : undefined
-            }
+            href={currentPage > 1 ? getPageHref(currentPage - 1) : undefined}
             aria-disabled={currentPage <= 1}
             className={
               currentPage <= 1
@@ -69,7 +63,7 @@ export default function CustomPagination({
               <PaginationEllipsis />
             ) : (
               <PaginationLink
-                onClick={() => handlePageChange(page)}
+                href={getPageHref(page)}
                 isActive={currentPage === page}
               >
                 {page}
@@ -80,9 +74,9 @@ export default function CustomPagination({
 
         <PaginationItem>
           <PaginationNext
-            onClick={
+            href={
               currentPage < totalPages
-                ? () => handlePageChange(currentPage + 1)
+                ? getPageHref(currentPage + 1)
                 : undefined
             }
             aria-disabled={currentPage >= totalPages}

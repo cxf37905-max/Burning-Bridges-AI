@@ -7,13 +7,12 @@ import { sendCreditDistributionNotification } from '@/notification';
 import { distributeCreditsToAllUsers } from '../src/credits/distribute';
 
 async function main() {
-  console.log('DATABASE_URL:', process.env.DATABASE_URL);
-
   if (!process.env.DATABASE_URL) {
     console.log('DATABASE_URL is not configured, skip distribution.');
     process.exit(0);
   }
 
+  console.log('DATABASE_URL is configured.');
   console.log('>>> Credit distribution script start');
   try {
     const result = await distributeCreditsToAllUsers();

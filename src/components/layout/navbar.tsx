@@ -90,6 +90,15 @@ export function Navbar({ scroll = true }: NavBarProps) {
                   item.items ? (
                     <NavigationMenuItem key={item.title} value={item.title}>
                       <NavigationMenuTrigger
+                        onPointerDownCapture={(event) => {
+                          if (event.pointerType === 'mouse') {
+                            event.preventDefault();
+                          }
+                        }}
+                        onClickCapture={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
                         className={cn(
                           'bg-transparent',
                           item.items.some((sub) =>

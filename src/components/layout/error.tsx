@@ -2,7 +2,7 @@
 
 import { Logo } from '@/components/layout/logo';
 import { Button } from '@/components/ui/button';
-import { useLocaleRouter } from '@/i18n/navigation';
+import { LocaleLink, useLocaleRouter } from '@/i18n/navigation';
 import { Loader2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTransition } from 'react';
@@ -43,12 +43,8 @@ export default function Error({ reset }: { reset: () => void }) {
           {t('tryAgain')}
         </Button>
 
-        <Button
-          type="submit"
-          variant="outline"
-          onClick={() => router.push('/')}
-        >
-          {t('backToHome')}
+        <Button asChild variant="outline">
+          <LocaleLink href="/">{t('backToHome')}</LocaleLink>
         </Button>
       </div>
     </div>

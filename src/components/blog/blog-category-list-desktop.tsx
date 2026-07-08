@@ -15,6 +15,7 @@ export function BlogCategoryListDesktop({
   categoryList,
 }: BlogCategoryListDesktopProps) {
   const { slug } = useParams() as { slug?: string };
+  const activeCategory = slug ?? 'All';
   const t = useTranslations('BlogPage');
 
   return (
@@ -22,31 +23,36 @@ export function BlogCategoryListDesktop({
       <ToggleGroup
         size="sm"
         type="single"
-        value={slug || 'All'}
+        value={activeCategory}
         aria-label="Toggle blog category"
         className="h-9 overflow-hidden rounded-md space-x-1 border bg-background p-1 *:h-7 *:text-muted-foreground"
       >
         <ToggleGroupItem
+          asChild
           key="All"
           value="All"
           className={cn(
-            'rounded-sm px-2',
+            'rounded-sm px-6',
             'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
             'hover:bg-accent hover:text-accent-foreground'
           )}
           aria-label={'Toggle all blog categories'}
         >
-          <LocaleLink href={'/blog'} className="px-4">
-            <h2>{t('all')}</h2>
+          <LocaleLink
+            href={'/blog'}
+            aria-current={activeCategory === 'All' ? 'page' : undefined}
+          >
+            <span>{t('all')}</span>
           </LocaleLink>
         </ToggleGroupItem>
 
         {categoryList.map((category) => (
           <ToggleGroupItem
+            asChild
             key={category.slug}
             value={category.slug}
             className={cn(
-              'rounded-sm px-2',
+              'rounded-sm px-6',
               'data-[state=on]:bg-primary data-[state=on]:text-primary-foreground',
               'hover:bg-accent hover:text-accent-foreground'
             )}
@@ -54,9 +60,11 @@ export function BlogCategoryListDesktop({
           >
             <LocaleLink
               href={`/blog/category/${category.slug}`}
-              className="px-4"
+              aria-current={
+                activeCategory === category.slug ? 'page' : undefined
+              }
             >
-              <h2>{category.name}</h2>
+              <span>{category.name}</span>
             </LocaleLink>
           </ToggleGroupItem>
         ))}

@@ -1,8 +1,6 @@
 'use client';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import Image from 'next/image';
-import { useState } from 'react';
 
 interface BlogImageProps {
   src: string;
@@ -11,29 +9,14 @@ interface BlogImageProps {
 }
 
 export default function BlogImage({ src, alt, title }: BlogImageProps) {
-  const [imageLoading, setImageLoading] = useState(true);
-
-  const handleImageLoad = () => {
-    setImageLoading(false);
-  };
-
   return (
-    <div className="relative w-full h-full">
-      {/* loading skeleton */}
-      {imageLoading && (
-        <Skeleton className="absolute inset-0 h-full w-full rounded-b-none z-10" />
-      )}
-
-      {/* actual image */}
+    <div className="relative w-full h-full bg-muted">
       <Image
         src={src}
         alt={alt}
         title={title || alt}
-        className={`object-cover hover:scale-105 transition-transform duration-300 ${
-          imageLoading ? 'opacity-0' : 'opacity-100'
-        }`}
+        className="object-cover transition-transform duration-300 hover:scale-105"
         fill
-        onLoad={handleImageLoad}
       />
     </div>
   );

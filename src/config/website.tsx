@@ -64,8 +64,8 @@ export const websiteConfig: WebsiteConfig = {
     enableUpgradeCard: true,
     enableUpdateAvatar: true,
     enableDatafastRevenueTrack: false,
-    enableCrispChat: process.env.NEXT_PUBLIC_DEMO_WEBSITE === 'true',
-    enableTurnstileCaptcha: process.env.NEXT_PUBLIC_DEMO_WEBSITE === 'true',
+    enableCrispChat: false,
+    enableTurnstileCaptcha: true,
   },
   affiliates: {
     enable: false,
@@ -76,7 +76,7 @@ export const websiteConfig: WebsiteConfig = {
     enableSpeedInsights: false,
   },
   apikeys: {
-    enable: process.env.NEXT_PUBLIC_DEMO_WEBSITE === 'true',
+    enable: false,
   },
   auth: {
     enableGoogleLogin: true,
@@ -186,7 +186,7 @@ export const websiteConfig: WebsiteConfig = {
     },
   },
   credits: {
-    enableCredits: process.env.NEXT_PUBLIC_DEMO_WEBSITE === 'true',
+    enableCredits: true,
     enablePackagesForFreePlan: false,
     registerGiftCredits: {
       enable: true,
