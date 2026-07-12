@@ -504,15 +504,22 @@ export class CreemProvider implements PaymentProvider {
       return;
     }
 
+    const paymentRecord = existing[0];
+    const currentPeriodStart = sub.currentPeriodStartDate
+      ? new Date(sub.currentPeriodStartDate)
+      : null;
+    const isRenewal =
+      paymentRecord.periodStart !== null &&
+      currentPeriodStart !== null &&
+      paymentRecord.periodStart.getTime() !== currentPeriodStart.getTime();
+
     // Update existing payment record with renewed period
     await db
       .update(payment)
       .set({
         status: 'active' as PaymentStatus,
         paid: true,
-        periodStart: sub.currentPeriodStartDate
-          ? new Date(sub.currentPeriodStartDate)
-          : null,
+        periodStart: currentPeriodStart,
         periodEnd: sub.currentPeriodEndDate
           ? new Date(sub.currentPeriodEndDate)
           : null,
@@ -525,10 +532,19 @@ export class CreemProvider implements PaymentProvider {
       .where(eq(payment.subscriptionId, sub.id));
 
     // Add subscription credits (renewal)
-    const paymentRecord = existing[0];
     if (websiteConfig.credits?.enableCredits) {
       await addSubscriptionCredits(paymentRecord.userId, paymentRecord.priceId);
       console.log('Added subscription credits for user:', paymentRecord.userId);
+    }
+
+    if (isRenewal) {
+      await sendPaymentNotification({
+        sessionId: event.id,
+        customerId: sub.customer.id,
+        userName:
+          (sub.metadata?.userName as string) ?? sub.customer.name ?? 'Customer',
+        amount: sub.product.price ? sub.product.price / 100 : 0,
+      });
     }
 
     console.log('<< Handle Creem subscription paid success');
@@ -770,6 +786,7 @@ export class CreemProvider implements PaymentProvider {
           periodEnd: sub.currentPeriodEndDate
             ? new Date(sub.currentPeriodEndDate)
             : null,
+          cancelAtPeriodEnd: false,
           updatedAt: new Date(),
         })
         .where(eq(payment.subscriptionId, sub.id));
@@ -969,6 +986,14 @@ export class CreemProvider implements PaymentProvider {
         console.warn('<< Missing packageId or credits in metadata');
       }
 
+      await sendPaymentNotification({
+        sessionId: event.id,
+        customerId: object.customer?.id ?? '',
+        userName:
+          (metadata.userName as string) ?? object.customer?.name ?? 'Customer',
+        amount: object.product.price ? object.product.price / 100 : 0,
+      });
+
       await this.markCheckoutPaymentProcessed(paymentSyncId);
       console.log('<< Created Creem credit payment record success');
     } catch (error) {
@@ -1041,6 +1066,16 @@ export class CreemProvider implements PaymentProvider {
         await addSubscriptionCredits(userId, object.product.id);
         console.log('Added initial subscription credits for user:', userId);
       }
+
+      await sendPaymentNotification({
+        sessionId: event.id,
+        customerId: object.customer?.id ?? '',
+        userName:
+          (object.metadata?.userName as string) ??
+          object.customer?.name ??
+          'Customer',
+        amount: object.product.price ? object.product.price / 100 : 0,
+      });
 
       await this.markCheckoutPaymentProcessed(paymentSyncId);
       console.log('<< Created Creem subscription payment record success');

@@ -115,7 +115,7 @@ export const websiteConfig: WebsiteConfig = {
   },
   notification: {
     enable: true,
-    provider: 'discord',
+    provider: 'feishu',
   },
   storage: {
     enable: true,
