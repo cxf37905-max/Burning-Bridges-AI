@@ -22,8 +22,14 @@ import {
   XIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { UserButtonMobile } from './user-button-mobile';
+
+const UserButtonMobile = dynamic(
+  () =>
+    import('./user-button-mobile').then((module) => module.UserButtonMobile),
+  { loading: () => <Skeleton className="size-8 rounded-full" /> }
+);
 
 const mobileLinkClass =
   'flex w-full items-center rounded-md p-2 text-base text-muted-foreground transition-colors duration-150 hover:text-foreground';

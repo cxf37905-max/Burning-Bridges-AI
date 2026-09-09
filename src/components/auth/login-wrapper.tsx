@@ -1,6 +1,6 @@
 'use client';
 
-import { LoginForm } from '@/components/auth/login-form';
+import dynamic from 'next/dynamic';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,10 @@ import {
 import { useLocaleRouter } from '@/i18n/navigation';
 import { Routes } from '@/routes';
 import { useEffect, useState } from 'react';
+
+const LoginForm = dynamic(() =>
+  import('@/components/auth/login-form').then((module) => module.LoginForm)
+);
 
 interface LoginWrapperProps {
   children: React.ReactNode;
@@ -55,7 +59,9 @@ export const LoginWrapper = ({
           <DialogHeader className="hidden">
             <DialogTitle />
           </DialogHeader>
-          <LoginForm callbackUrl={callbackUrl} className="border-none" />
+          {isModalOpen && (
+            <LoginForm callbackUrl={callbackUrl} className="border-none" />
+          )}
         </DialogContent>
       </Dialog>
     );

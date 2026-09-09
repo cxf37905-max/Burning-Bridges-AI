@@ -42,6 +42,7 @@ export const fontNotoSans = Noto_Sans({
 
 // https://fonts.google.com/noto/specimen/Noto+Serif
 export const fontNotoSerif = Noto_Serif({
+  preload: false,
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-noto-serif',
@@ -50,6 +51,7 @@ export const fontNotoSerif = Noto_Serif({
 
 // https://fonts.google.com/noto/specimen/Noto+Sans+Mono
 export const fontNotoSansMono = Noto_Sans_Mono({
+  preload: false,
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-noto-sans-mono',

@@ -104,7 +104,6 @@
     "next-themes": "^0.4.6",
     "nuqs": "^2.8.6",
     "postgres": "^3.4.8",
-    "posthog-js": "^1.335.2",
     "radix-ui": "^1.4.3",
     "react": "^19.2.3",
     "react-day-picker": "9.14.0",

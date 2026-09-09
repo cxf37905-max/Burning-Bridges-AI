@@ -5,7 +5,6 @@ import Container from '@/components/layout/container';
 import { Logo } from '@/components/layout/logo';
 import { ModeSwitcher } from '@/components/layout/mode-switcher';
 import { NavbarMobile } from '@/components/layout/navbar-mobile';
-import { UserButton } from '@/components/layout/user-button';
 import { buttonVariants } from '@/components/ui/button';
 import {
   NavigationMenu,
@@ -25,8 +24,14 @@ import { cn } from '@/lib/utils';
 import { Routes } from '@/routes';
 import { ArrowUpRightIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import LocaleSwitcher from './locale-switcher';
+
+const UserButton = dynamic(
+  () => import('./user-button').then((module) => module.UserButton),
+  { loading: () => <Skeleton className="size-9 rounded-full" /> }
+);
 
 interface NavBarProps {
   scroll?: boolean;
