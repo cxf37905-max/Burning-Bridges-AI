@@ -26,20 +26,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // Process the webhook event
-    await handleWebhookEvent(payload, signature);
+    await handleWebhookEvent(payload, signature, 'stripe');
 
     // Return success
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error) {
     console.error('Error in webhook route:', error);
 
-    // IMPORTANT: Return 200 to acknowledge receipt even on processing errors.
-    // Stripe interprets 4xx/5xx as delivery failure and will retry the event
-    // indefinitely (up to 3 days), which can cause duplicate processing and
-    // unnecessary load. The error has already been logged for investigation.
     return NextResponse.json(
-      { error: 'Webhook handler failed', received: true },
-      { status: 200 }
+      { error: 'Webhook processing failed' },
+      { status: 500 }
     );
   }
 }

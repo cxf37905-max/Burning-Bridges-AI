@@ -9,11 +9,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCreditPackages } from '@/config/credits-config';
-import { websiteConfig } from '@/config/website';
+import { commercialUseTerms, websiteConfig } from '@/config/website';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { useCurrentPlan } from '@/hooks/use-payment';
+import { LocaleLink } from '@/i18n/navigation';
 import { formatPrice } from '@/lib/formatter';
 import { cn } from '@/lib/utils';
+import { Routes } from '@/routes';
 import { CircleCheckBigIcon, CoinsIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { CreditCheckoutButton } from './credit-checkout-button';
@@ -112,6 +114,11 @@ export function CreditPackages() {
                   <CircleCheckBigIcon className="h-4 w-4 text-green-500" />
                   {creditPackage.description}
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  {creditPackage.expireDays
+                    ? t('creditExpiryDays', { days: creditPackage.expireDays })
+                    : t('creditsDoNotExpire')}
+                </p>
 
                 {/* purchase button using checkout */}
                 <CreditCheckoutButton
@@ -124,10 +131,22 @@ export function CreditPackages() {
                 >
                   {t('purchase')}
                 </CreditCheckoutButton>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t('oneTimePurchase')}{' '}
+                  <LocaleLink
+                    href={Routes.TermsOfService}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    {t('termsOfService')}
+                  </LocaleLink>
+                </p>
               </CardContent>
             </Card>
           ))}
         </div>
+        <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
+          {commercialUseTerms}
+        </p>
       </CardContent>
     </Card>
   );

@@ -147,11 +147,7 @@ export const getCurrentPlanAction = userActionClient
         console.log('Check current plan, user has active subscription');
         // Find the corresponding plan for the subscription
         const subscriptionPlan =
-          plans.find((p) =>
-            p.prices.find(
-              (price) => price.priceId === activeSubscription!.priceId
-            )
-          ) || null;
+          findPlanByPriceId(activeSubscription.priceId) || null;
 
         return {
           success: true,

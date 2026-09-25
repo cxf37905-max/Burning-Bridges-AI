@@ -23,7 +23,14 @@ export type WebsiteConfig = {
   payment: PaymentConfig;
   price: PriceConfig;
   credits: CreditsConfig;
+  legal: LegalConfig;
 };
+
+/** 每个新站上线前必须核实的公开事实。 */
+export interface LegalConfig {
+  supportEmail: string;
+  lastUpdated: string;
+}
 
 /**
  * UI configuration
@@ -181,7 +188,7 @@ export interface StorageConfig {
  * Payment configuration
  */
 export interface PaymentConfig {
-  provider: 'stripe' | 'creem';      // The payment provider
+  provider: 'stripe' | 'creem' | 'paypal'; // 支付服务商
 }
 
 /**

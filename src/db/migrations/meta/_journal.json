@@ -71,6 +71,13 @@
       "when": 1783170354900,
       "tag": "0009_strange_darkhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790151277327,
+      "tag": "0010_productive_mole_man",
+      "breakpoints": true
     }
   ]
 }

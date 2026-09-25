@@ -9,7 +9,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { LocaleLink } from '@/i18n/navigation';
-import { isDemoWebsite } from '@/lib/demo';
 import React, { type ComponentProps, type ReactNode } from 'react';
 import { CreditsBalanceButton } from '../layout/credits-balance-button';
 import LocaleSwitcher from '../layout/locale-switcher';
@@ -33,8 +32,6 @@ export function DashboardHeader({
   breadcrumbs,
   actions,
 }: DashboardHeaderProps) {
-  const isDemo = isDemoWebsite();
-
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
       <div className="flex w-full min-w-0 items-center gap-2 px-4 lg:px-6">

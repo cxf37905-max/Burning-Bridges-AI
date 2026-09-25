@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { user } from "./auth.schema";
 import type { PaymentScene, PaymentStatus, PaymentType, PlanInterval } from "@/payment/types";
 
@@ -57,6 +57,7 @@ export const creditTransaction = pgTable("credit_transaction", {
 	amount: integer("amount").notNull(),
 	remainingAmount: integer("remaining_amount"),
 	paymentId: text("payment_id"), // field name is paymentId, but actually it's invoiceId
+	idempotencyKey: text("idempotency_key"),
 	expirationDate: timestamp("expiration_date"),
 	expirationDateProcessedAt: timestamp("expiration_date_processed_at"),
 	createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -64,4 +65,5 @@ export const creditTransaction = pgTable("credit_transaction", {
 }, (table) => ({
 	creditTransactionUserIdIdx: index("credit_transaction_user_id_idx").on(table.userId),
 	creditTransactionTypeIdx: index("credit_transaction_type_idx").on(table.type),
+	creditTransactionIdempotencyKeyUnique: uniqueIndex("credit_transaction_idempotency_key_unique").on(table.idempotencyKey),
 }));

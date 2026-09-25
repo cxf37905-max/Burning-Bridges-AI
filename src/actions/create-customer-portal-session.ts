@@ -1,12 +1,13 @@
 'use server';
 
 import { getDb } from '@/db';
-import { user } from '@/db/schema';
+import { payment, user } from '@/db/schema';
+import { findPaymentPriceKey } from '@/config/website';
 import { userActionClient } from '@/lib/safe-action';
 import { getUrlWithLocale } from '@/lib/urls';
 import { createCustomerPortal } from '@/payment';
-import type { CreatePortalParams } from '@/payment/types';
-import { eq } from 'drizzle-orm';
+import { type CreatePortalParams, PaymentTypes } from '@/payment/types';
+import { and, desc, eq } from 'drizzle-orm';
 import { getLocale } from 'next-intl/server';
 import { z } from 'zod';
 
@@ -34,7 +35,27 @@ export const createPortalAction = userActionClient
         .where(eq(user.id, currentUser.id))
         .limit(1);
 
-      if (customerResult.length <= 0 || !customerResult[0].customerId) {
+      const subscriptionResult = await db
+        .select({ customerId: payment.customerId, priceId: payment.priceId })
+        .from(payment)
+        .where(
+          and(
+            eq(payment.userId, currentUser.id),
+            eq(payment.type, PaymentTypes.SUBSCRIPTION),
+            eq(payment.paid, true)
+          )
+        )
+        .orderBy(desc(payment.createdAt))
+        .limit(1);
+
+      const subscription = subscriptionResult[0];
+      const subscriptionProvider = subscription
+        ? findPaymentPriceKey(subscription.priceId)?.provider
+        : undefined;
+      const customerId =
+        subscription?.customerId || customerResult[0]?.customerId;
+
+      if (!customerId) {
         console.error(`No customer found for user ${currentUser.id}`);
         return {
           success: false,
@@ -49,12 +70,12 @@ export const createPortalAction = userActionClient
       const returnUrlWithLocale =
         returnUrl || getUrlWithLocale('/settings/billing', locale);
       const params: CreatePortalParams = {
-        customerId: customerResult[0].customerId,
+        customerId,
         returnUrl: returnUrlWithLocale,
         locale,
       };
 
-      const result = await createCustomerPortal(params);
+      const result = await createCustomerPortal(params, subscriptionProvider);
       // console.log('create customer portal result:', result);
       return {
         success: true,

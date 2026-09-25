@@ -1,4 +1,5 @@
 import { websiteConfig } from '@/config/website';
+import { findPaymentPriceKey } from '@/config/website';
 import type { Price, PricePlan } from '@/payment/types';
 
 /**
@@ -34,7 +35,22 @@ export const findPlanByPriceId = (priceId: string): PricePlan | undefined => {
       return plan;
     }
   }
+  const key = findPaymentPriceKey(priceId)?.key;
+  if (key === 'lifetime') return plans.find((plan) => plan.isLifetime);
+  if (key === 'proMonthly' || key === 'proYearly') {
+    return plans.find((plan) => plan.id === 'pro');
+  }
   return undefined;
+};
+
+export const findConfiguredPriceById = (priceId: string): Price | undefined => {
+  const key = findPaymentPriceKey(priceId)?.key;
+  if (key === 'proMonthly') return websiteConfig.price.plans.pro.prices[0];
+  if (key === 'proYearly') return websiteConfig.price.plans.pro.prices[1];
+  if (key === 'lifetime') return websiteConfig.price.plans.lifetime.prices[0];
+  return getAllPricePlans()
+    .flatMap((plan) => plan.prices)
+    .find((price) => price.priceId === priceId);
 };
 
 /**

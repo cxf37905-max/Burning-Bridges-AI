@@ -2,12 +2,12 @@
 
 import Container from '@/components/layout/container';
 import { Logo } from '@/components/layout/logo';
-import { ModeSwitcherHorizontal } from '@/components/layout/mode-switcher-horizontal';
 import BuiltWithButton from '@/components/shared/built-with-button';
 import { useFooterLinks } from '@/config/footer-config';
 import { useSocialLinks } from '@/config/social-config';
 import { LocaleLink, useLocalePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { Routes } from '@/routes';
 import { useTranslations } from 'next-intl';
 import type React from 'react';
 
@@ -20,7 +20,7 @@ export function Footer({ className }: React.HTMLAttributes<HTMLElement>) {
   return (
     <footer className={cn('border-t', className)}>
       <Container className="px-4">
-        <div className="grid grid-cols-2 gap-8 py-16 md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-8 py-16 md:grid-cols-5">
           <div className="flex flex-col items-start col-span-full md:col-span-2">
             <div className="space-y-4">
               {/* logo and name */}
@@ -102,15 +102,29 @@ export function Footer({ className }: React.HTMLAttributes<HTMLElement>) {
       </Container>
 
       <div className="border-t py-8">
-        <Container className="px-4 flex items-center justify-between gap-x-4">
+        <Container className="flex flex-col gap-5 px-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-muted-foreground text-sm">
             &copy; {new Date().getFullYear()} {t('Metadata.name')}. All Rights
             Reserved.
           </span>
 
-          <div className="flex items-center gap-x-4">
-            <ModeSwitcherHorizontal />
-          </div>
+          <nav
+            aria-label={t('Marketing.footer.legal.title')}
+            className="flex items-center gap-x-5"
+          >
+            <LocaleLink
+              href={Routes.PrivacyPolicy}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t('Marketing.footer.legal.items.privacyPolicy')}
+            </LocaleLink>
+            <LocaleLink
+              href={Routes.TermsOfService}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t('Marketing.footer.legal.items.termsOfService')}
+            </LocaleLink>
+          </nav>
         </Container>
       </div>
     </footer>

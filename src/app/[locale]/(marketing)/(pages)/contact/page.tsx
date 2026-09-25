@@ -1,5 +1,7 @@
 import { ContactFormCard } from '@/components/contact/contact-form-card';
 import Container from '@/components/layout/container';
+import { websiteConfig } from '@/config/website';
+import { defaultMessages } from '@/i18n/messages';
 import { constructMetadata } from '@/lib/metadata';
 import type { Metadata } from 'next';
 import type { Locale } from 'next-intl';
@@ -45,6 +47,15 @@ export default async function ContactPage({
           </h1>
           <p className="text-center text-lg text-muted-foreground">
             {t('subtitle')}
+          </p>
+          <p className="text-center text-sm text-muted-foreground">
+            {defaultMessages.Metadata.name} ·{' '}
+            <a
+              className="underline underline-offset-4"
+              href={`mailto:${websiteConfig.legal.supportEmail}`}
+            >
+              {websiteConfig.legal.supportEmail}
+            </a>
           </p>
         </div>
 

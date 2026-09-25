@@ -1,5 +1,4 @@
 import { DashboardHeader } from '@/components/dashboard/dashboard-header';
-import { isDemoWebsite } from '@/lib/demo';
 import { getSession } from '@/lib/server';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -9,11 +8,9 @@ interface UsersLayoutProps {
 }
 
 export default async function UsersLayout({ children }: UsersLayoutProps) {
-  // if is demo website, allow user to access admin and user pages, but data is fake
-  const isDemo = isDemoWebsite();
-  // Check if user is admin
+  // 检查当前用户是否具有管理员权限
   const session = await getSession();
-  if (!session || (session.user.role !== 'admin' && !isDemo)) {
+  if (!session || session.user.role !== 'admin') {
     notFound();
   }
 

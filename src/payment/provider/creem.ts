@@ -533,7 +533,11 @@ export class CreemProvider implements PaymentProvider {
 
     // Add subscription credits (renewal)
     if (websiteConfig.credits?.enableCredits) {
-      await addSubscriptionCredits(paymentRecord.userId, paymentRecord.priceId);
+      await addSubscriptionCredits(
+        paymentRecord.userId,
+        paymentRecord.priceId,
+        currentPeriodStart ?? new Date()
+      );
       console.log('Added subscription credits for user:', paymentRecord.userId);
     }
 
@@ -893,7 +897,7 @@ export class CreemProvider implements PaymentProvider {
 
       // Add lifetime credits if enabled
       if (websiteConfig.credits?.enableCredits) {
-        await addLifetimeMonthlyCredits(userId, object.product.id);
+        await addLifetimeMonthlyCredits(userId, object.product.id, currentDate);
         console.log('Added lifetime credits for user:', userId);
       }
 
@@ -916,7 +920,9 @@ export class CreemProvider implements PaymentProvider {
         error instanceof Error &&
         error.message.includes('unique constraint')
       ) {
-        console.log('<< One-time payment record already exists, skipping');
+        await addLifetimeMonthlyCredits(userId, object.product.id, currentDate);
+        await this.markCheckoutPaymentProcessed(paymentSyncId);
+        console.log('<< Recovered one-time payment credits after retry');
         return;
       }
       throw error;
@@ -976,14 +982,17 @@ export class CreemProvider implements PaymentProvider {
             type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
             description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
             paymentId: event.id,
+            idempotencyKey: `payment:creem:${event.id}`,
             expireDays: creditPackage.expireDays,
           });
           console.log('Added purchased credits for user:', userId);
         } else {
-          console.warn('<< Credit package not found:', packageId);
+          throw new Error(`Credit package not found: ${packageId}`);
         }
       } else {
-        console.warn('<< Missing packageId or credits in metadata');
+        throw new Error(
+          `Creem credit purchase metadata is incomplete: ${event.id}`
+        );
       }
 
       await sendPaymentNotification({
@@ -1001,7 +1010,25 @@ export class CreemProvider implements PaymentProvider {
         error instanceof Error &&
         error.message.includes('unique constraint')
       ) {
-        console.log('<< Credit payment record already exists, skipping');
+        if (packageId && credits) {
+          const creditPackage = getCreditPackageById(packageId);
+          if (creditPackage) {
+            const amount = object.product.price
+              ? object.product.price / 100
+              : 0;
+            await addCredits({
+              userId,
+              amount: Number.parseInt(credits),
+              type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
+              description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
+              paymentId: event.id,
+              idempotencyKey: `payment:creem:${event.id}`,
+              expireDays: creditPackage.expireDays,
+            });
+          }
+        }
+        await this.markCheckoutPaymentProcessed(paymentSyncId);
+        console.log('<< Recovered credit payment after retry');
         return;
       }
       throw error;
@@ -1063,7 +1090,11 @@ export class CreemProvider implements PaymentProvider {
 
       // Add subscription credits on initial subscription purchase
       if (websiteConfig.credits?.enableCredits) {
-        await addSubscriptionCredits(userId, object.product.id);
+        await addSubscriptionCredits(
+          userId,
+          object.product.id,
+          periodStart ?? currentDate
+        );
         console.log('Added initial subscription credits for user:', userId);
       }
 
@@ -1084,7 +1115,15 @@ export class CreemProvider implements PaymentProvider {
         error instanceof Error &&
         error.message.includes('unique constraint')
       ) {
-        console.log('<< Subscription payment record already exists, skipping');
+        if (websiteConfig.credits?.enableCredits) {
+          await addSubscriptionCredits(
+            userId,
+            object.product.id,
+            periodStart ?? currentDate
+          );
+        }
+        await this.markCheckoutPaymentProcessed(paymentSyncId);
+        console.log('<< Recovered subscription payment after retry');
         return;
       }
       throw error;

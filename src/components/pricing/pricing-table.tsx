@@ -2,7 +2,10 @@
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { usePricePlans } from '@/config/price-config';
+import { commercialUseTerms } from '@/config/website';
+import { LocaleLink } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { Routes } from '@/routes';
 import {
   PaymentTypes,
   type PlanInterval,
@@ -175,6 +178,17 @@ export function PricingTable({
           </div>
         );
       })()}
+      <div className="mx-auto max-w-3xl space-y-2 text-sm leading-relaxed text-muted-foreground">
+        <p>{commercialUseTerms}</p>
+        <p>
+          <LocaleLink
+            href={Routes.TermsOfService}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {t('termsOfService')}
+          </LocaleLink>
+        </p>
+      </div>
     </div>
   );
 }

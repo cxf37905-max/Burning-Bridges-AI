@@ -67,7 +67,7 @@ export const pages = defineCollections({
   type: 'doc',
   dir: 'content/pages',
   schema: frontmatterSchema.extend({
-    date: z.string().date(),
+    date: z.string().date().optional(),
     published: z.boolean().default(true),
   }),
 });

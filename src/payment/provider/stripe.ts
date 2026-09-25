@@ -716,7 +716,11 @@ export class StripeProvider implements PaymentProvider {
         .where(eq(payment.id, paymentRecord.id));
 
       // Process subscription benefits
-      await this.processSubscriptionPurchase(userId, priceId);
+      await this.processSubscriptionPurchase(
+        userId,
+        priceId,
+        periodStart ?? new Date()
+      );
     } catch (error) {
       console.error('<< Update subscription payment error:', error);
       throw error;
@@ -732,12 +736,13 @@ export class StripeProvider implements PaymentProvider {
    */
   private async processSubscriptionPurchase(
     userId: string,
-    priceId: string
+    priceId: string,
+    grantDate: Date
   ): Promise<void> {
     console.log('>> Process subscription purchase');
 
     if (websiteConfig.credits?.enableCredits) {
-      await addSubscriptionCredits(userId, priceId);
+      await addSubscriptionCredits(userId, priceId, grantDate);
       console.log('Added subscription credits for user:', userId);
     }
 
@@ -814,15 +819,13 @@ export class StripeProvider implements PaymentProvider {
     const credits = metadata.credits;
 
     if (!packageId || !credits) {
-      console.warn('<< Missing packageId or credits in metadata');
-      return;
+      throw new Error(`Credit purchase metadata is incomplete: ${invoice.id}`);
     }
 
     // Get credit package
     const creditPackage = getCreditPackageById(packageId);
     if (!creditPackage) {
-      console.warn('<< Credit package not found:', packageId);
-      return;
+      throw new Error(`Credit package not found: ${packageId}`);
     }
 
     // Add credits to user account
@@ -833,6 +836,7 @@ export class StripeProvider implements PaymentProvider {
       type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
       description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
       paymentId: invoice.id,
+      idempotencyKey: `payment:stripe:${invoice.id}`,
       expireDays: creditPackage.expireDays,
     });
 

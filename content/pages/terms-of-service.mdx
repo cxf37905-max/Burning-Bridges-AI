@@ -1,51 +1,71 @@
 ---
 title: Terms of Service
-description: The terms and conditions governing the use of our services
-date: "2025-03-10"
 published: true
 ---
 
-## Introduction
+import { commercialUseTerms, websiteConfig } from '@/config/website';
+import { defaultMessages } from '@/i18n/messages';
 
-These Terms of Service ("Terms") govern your use of our website and services. By accessing or using our services, you agree to be bound by these Terms.
+## 1. Introduction
 
-## Use of Services
+Welcome to {defaultMessages.Metadata.name}. By accessing or using our Service, you agree to be bound by these Terms of Service ("Terms"). Please read these Terms carefully before using the Service.
 
-Our services are provided "as is" and "as available" without warranties of any kind, either express or implied. We do not guarantee that our services will be uninterrupted, secure, or error-free.
+## 2. Service Description
 
-## User Accounts
+{defaultMessages.Metadata.name} provides AI-powered image generation, video generation, editing, and related creative tools. Some features may be available without signing in, while other features may require an account, subscription, credits, or payment. {defaultMessages.Metadata.name} is an independent product and interface layer built around in-house systems and third-party model providers; unless explicitly stated otherwise, {defaultMessages.Metadata.name} is not affiliated with or endorsed by the underlying model providers.
 
-When you create an account with us, you must provide accurate and complete information. You are responsible for safeguarding your account and for all activities that occur under your account.
+## 3. User Obligations
 
-## Intellectual Property
+By using our Service, you agree to:
 
-Our website and its original content, features, and functionality are owned by us and are protected by international copyright, trademark, and other intellectual property laws.
+- Use the Service in compliance with all applicable laws and regulations
+- Not attempt to circumvent any limitations or security measures
+- Not use the Service for any illegal or unauthorized purposes
+- Not interfere with or disrupt the Service or servers
+- Not generate content that violates intellectual property rights or contains harmful material
 
-## User Content
+## 4. Intellectual Property Rights
 
-You retain all rights to any content you submit, post, or display on or through our services. By submitting content, you grant us a worldwide, non-exclusive, royalty-free license to use, reproduce, modify, and distribute your content.
+Subject to these Terms and applicable law, paid subscribers may use content generated through the Service for personal or commercial purposes. Free users may use generated content for personal and other non-commercial purposes only, unless {defaultMessages.Metadata.name} expressly states otherwise. You are responsible for ensuring that your prompts, uploads, and resulting outputs do not infringe third-party rights, violate applicable law, or breach these Terms.
 
-## Prohibited Activities
 
-You agree not to:
+## 5. Privacy and Data Protection
 
-- Use our services in any way that violates any applicable law or regulation
-- Engage in any conduct that restricts or inhibits anyone's use or enjoyment of our services
-- Attempt to gain unauthorized access to our servers or networks
-- Use our services to distribute malware or other harmful code
+Our privacy practices are described in our Privacy Policy. We follow a minimal data collection approach: requests from users who are not signed in are typically processed temporarily, while signed-in users may retain the information needed for account features, history, subscriptions, billing, support, and security protections.
 
-## Termination
+## 6. Subscriptions, Billing, and Cancellation
 
-We may terminate or suspend your account and access to our services immediately, without prior notice or liability, for any reason.
+If you purchase a subscription, credits, or other paid features, the applicable pricing, billing terms, and product entitlements will be presented at checkout or on the pricing page. Users can manage or cancel their subscription from the pricing page or through the subscription management portal made available by {defaultMessages.Metadata.name}. Cancellation generally stops future renewals but does not retroactively cancel benefits already provided for the current billing period, unless required by law.
 
-## Limitation of Liability
+## 7. Acceptable Use and Prohibited Content
 
-In no event shall we be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use our services.
+You may not use the Service to generate or attempt to generate:
 
-## Changes to Terms
+- Any NSFW, sexually explicit, nude, semi-nude, sexually suggestive, pornographic, uncensored, or 18+ content
+- Content that violates any applicable laws or regulations
+- Hateful, discriminatory, or offensive content
+- Content that infringes on intellectual property rights
+- Content intended to harass, abuse, exploit, or harm others
+- Violent, deceptive, fraudulent, or otherwise harmful content
 
-We reserve the right to modify these Terms at any time. If we make changes, we will provide notice by posting the updated Terms on this page.
+We may block, remove, refuse to process, or restrict access to content or accounts that violate these Terms or create legal, safety, or abuse risks.
 
-## Contact Us
+## 8. Refunds and Support
 
-If you have any questions about these Terms, please [contact us](/contact).
+As a general rule, purchases of digital and virtual products are non-refundable. If you have a refund request or billing issue, please contact <a href={`mailto:${websiteConfig.legal.supportEmail}`}>{websiteConfig.legal.supportEmail}</a>. We review refund-related requests on a case-by-case basis and will generally respond within 3 business days. Nothing in these Terms limits any mandatory rights you may have under applicable law.
+
+## 9. Service Availability
+
+While we strive to maintain continuous service availability, we do not guarantee uninterrupted access to the Service. We reserve the right to modify, suspend, or discontinue any aspect of the Service at any time without notice.
+
+## 10. Limitation of Liability
+
+The Service is provided "as is" without any warranties. We shall not be liable for any damages arising from the use of the Service, including but not limited to direct, indirect, incidental, punitive, and consequential damages.
+
+## 11. Changes to Terms
+
+We reserve the right to modify these Terms at any time. Continued use of the Service after any changes constitutes acceptance of the new Terms. We will notify users of material changes by posting the updated Terms on this page.
+
+## 12. Contact Information
+
+If you have any questions about these Terms, please contact us at <a href={`mailto:${websiteConfig.legal.supportEmail}`}>{websiteConfig.legal.supportEmail}</a>.

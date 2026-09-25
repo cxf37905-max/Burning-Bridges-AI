@@ -1,35 +1,75 @@
 import { PaymentTypes, PlanIntervals } from '@/payment/types';
 import type { PaymentConfig, WebsiteConfig } from '@/types';
 
-// Payment provider controlled by env var: 'stripe' | 'creem'
+const paymentPriceIds: Record<
+  NonNullable<PaymentConfig['provider']>,
+  Record<string, string>
+> = {
+  stripe: {
+    proMonthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY ?? '',
+    proYearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY ?? '',
+    lifetime: process.env.NEXT_PUBLIC_STRIPE_PRICE_LIFETIME ?? '',
+    creditsBasic: process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_BASIC ?? '',
+    creditsStandard:
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_STANDARD ?? '',
+    creditsPremium: process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_PREMIUM ?? '',
+    creditsEnterprise:
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_ENTERPRISE ?? '',
+  },
+  creem: {
+    proMonthly: process.env.NEXT_PUBLIC_CREEM_PRODUCT_PRO_MONTHLY ?? '',
+    proYearly: process.env.NEXT_PUBLIC_CREEM_PRODUCT_PRO_YEARLY ?? '',
+    lifetime: process.env.NEXT_PUBLIC_CREEM_PRODUCT_LIFETIME ?? '',
+    creditsBasic: process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_BASIC ?? '',
+    creditsStandard:
+      process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_STANDARD ?? '',
+    creditsPremium: process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_PREMIUM ?? '',
+    creditsEnterprise:
+      process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_ENTERPRISE ?? '',
+  },
+  paypal: {
+    proMonthly: process.env.NEXT_PUBLIC_PAYPAL_PLAN_PRO_MONTHLY ?? '',
+    proYearly: process.env.NEXT_PUBLIC_PAYPAL_PLAN_PRO_YEARLY ?? '',
+    lifetime:
+      process.env.NEXT_PUBLIC_PAYPAL_PRICE_LIFETIME ?? 'paypal_lifetime',
+    creditsBasic:
+      process.env.NEXT_PUBLIC_PAYPAL_PRICE_CREDITS_BASIC ??
+      'paypal_credits_basic',
+    creditsStandard:
+      process.env.NEXT_PUBLIC_PAYPAL_PRICE_CREDITS_STANDARD ??
+      'paypal_credits_standard',
+    creditsPremium:
+      process.env.NEXT_PUBLIC_PAYPAL_PRICE_CREDITS_PREMIUM ??
+      'paypal_credits_premium',
+    creditsEnterprise:
+      process.env.NEXT_PUBLIC_PAYPAL_PRICE_CREDITS_ENTERPRISE ??
+      'paypal_credits_enterprise',
+  },
+};
+
+export function findPaymentPriceKey(priceId: string) {
+  if (!priceId) return null;
+  for (const [provider, prices] of Object.entries(paymentPriceIds)) {
+    const key = Object.keys(prices).find((name) => prices[name] === priceId);
+    if (key)
+      return {
+        provider: provider as NonNullable<PaymentConfig['provider']>,
+        key,
+      };
+  }
+  return null;
+}
+
+// 支付商由环境变量选择：stripe、creem 或 paypal
 const paymentProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER ||
   'stripe') as PaymentConfig['provider'];
-const isCreem = paymentProvider === 'creem';
+const priceIds = paymentPriceIds[paymentProvider];
+// 客服邮箱只改这一处，法律页面、联系入口和邮件收件人共用。
+const legalSupportEmail = 'support@example.com';
 
-// Resolve price/product IDs based on the active payment provider
-const priceIds = {
-  proMonthly: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_PRO_MONTHLY!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY!,
-  proYearly: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_PRO_YEARLY!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY!,
-  lifetime: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_LIFETIME!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_LIFETIME!,
-  creditsBasic: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_BASIC!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_BASIC!,
-  creditsStandard: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_STANDARD!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_STANDARD!,
-  creditsPremium: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_PREMIUM!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_PREMIUM!,
-  creditsEnterprise: isCreem
-    ? process.env.NEXT_PUBLIC_CREEM_PRODUCT_CREDITS_ENTERPRISE!
-    : process.env.NEXT_PUBLIC_STRIPE_PRICE_CREDITS_ENTERPRISE!,
-};
+// 所有站点共用的生成内容使用规则，避免营销页和条款出现不同口径。
+export const commercialUseTerms =
+  'Subject to these terms and applicable law, users on a paid plan may use generated content for personal or commercial purposes. Users relying only on free access may use generated content solely for personal and other non-commercial purposes unless we expressly state otherwise.';
 
 /**
  * website config, without translations
@@ -38,6 +78,12 @@ const priceIds = {
  * https://mksaas.com/docs/config/website
  */
 export const websiteConfig: WebsiteConfig = {
+  // 新站上线前只需填写会随网站变化的公开信息。
+  legal: {
+    supportEmail: legalSupportEmail,
+    // 政策真正发布或更新的日期。
+    lastUpdated: '2026-09-24',
+  },
   ui: {
     mode: {
       defaultMode: 'dark',
@@ -105,8 +151,9 @@ export const websiteConfig: WebsiteConfig = {
   mail: {
     enable: true,
     provider: 'resend',
-    fromEmail: 'MkSaaS <onboarding@resend.dev>',
-    supportEmail: 'MkSaaS <support@example.com>',
+    // 默认与客服邮箱共用一个地址；上线前在 Resend 验证发信域名。
+    fromEmail: legalSupportEmail,
+    supportEmail: legalSupportEmail,
   },
   newsletter: {
     enable: true,

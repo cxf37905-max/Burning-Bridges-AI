@@ -22,7 +22,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useBanUser, useUnbanUser } from '@/hooks/use-users';
 import type { User } from '@/db/types';
-import { isDemoWebsite } from '@/lib/demo';
 import { formatDate } from '@/lib/formatter';
 import { getStripeDashboardCustomerUrl } from '@/lib/urls';
 import { cn } from '@/lib/utils';
@@ -52,9 +51,6 @@ export function UserDetailViewer({ user }: UserDetailViewerProps) {
   // TanStack Query mutations
   const banUserMutation = useBanUser();
   const unbanUserMutation = useUnbanUser();
-
-  // show fake data in demo website
-  const isDemo = isDemoWebsite();
 
   const handleBan = async () => {
     if (!banReason) {
@@ -249,7 +245,7 @@ export function UserDetailViewer({ user }: UserDetailViewerProps) {
               <Button
                 variant="destructive"
                 onClick={handleUnban}
-                disabled={unbanUserMutation.isPending || isDemo}
+                disabled={unbanUserMutation.isPending}
                 className="mt-4"
               >
                 {unbanUserMutation.isPending && (
@@ -308,7 +304,7 @@ export function UserDetailViewer({ user }: UserDetailViewerProps) {
               <Button
                 type="submit"
                 variant="destructive"
-                disabled={banUserMutation.isPending || !banReason || isDemo}
+                disabled={banUserMutation.isPending || !banReason}
                 className="mt-4"
               >
                 {banUserMutation.isPending && (

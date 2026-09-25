@@ -10,9 +10,10 @@ import {
 } from '@/components/ui/card';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { useMounted } from '@/hooks/use-mounted';
-import { useLocalePathname } from '@/i18n/navigation';
+import { LocaleLink, useLocalePathname } from '@/i18n/navigation';
 import { formatPrice } from '@/lib/formatter';
 import { cn } from '@/lib/utils';
+import { Routes } from '@/routes';
 import {
   type PaymentType,
   PaymentTypes,
@@ -156,6 +157,14 @@ export function PricingCard({
         <CardDescription>
           <p className="text-sm">{plan.description}</p>
         </CardDescription>
+        {plan.credits?.enable && (
+          <p className="text-sm text-muted-foreground">
+            {t('includedCredits', { credits: plan.credits.amount })}{' '}
+            {plan.credits.expireDays
+              ? t('creditExpiryDays', { days: plan.credits.expireDays })
+              : t('creditsDoNotExpire')}
+          </p>
+        )}
 
         {/* show action buttons based on plans */}
         {plan.isFree ? (
@@ -200,6 +209,44 @@ export function PricingCard({
           <Button disabled className="mt-4 w-full">
             {t('notAvailable')}
           </Button>
+        )}
+        {price && (
+          <div className="mt-3 space-y-1 text-xs leading-relaxed text-muted-foreground">
+            <p>
+              {price.type === PaymentTypes.SUBSCRIPTION
+                ? t(
+                    hasTrialPeriod
+                      ? 'subscriptionAfterTrial'
+                      : 'subscriptionRenewal',
+                    {
+                      price: formattedPrice,
+                      period:
+                        price.interval === PlanIntervals.YEAR
+                          ? t('year')
+                          : t('month'),
+                    }
+                  )
+                : t('oneTimePurchase')}
+            </p>
+            {price.type === PaymentTypes.SUBSCRIPTION && (
+              <p>
+                {t('cancelInBilling')}{' '}
+                <LocaleLink
+                  href={Routes.SettingsBilling}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  {t('billingSettings')}
+                </LocaleLink>
+                .
+              </p>
+            )}
+            <LocaleLink
+              href={Routes.TermsOfService}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              {t('termsOfService')}
+            </LocaleLink>
+          </div>
         )}
       </CardHeader>
 

@@ -358,6 +358,15 @@ export default function BillingCard({
                 {t('trialEnds')} {trialEndDate}
               </div>
             )}
+            <div className="text-xs leading-relaxed">
+              {t('cancellationHelp')}{' '}
+              <LocaleLink
+                href={Routes.TermsOfService}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {t('termsOfService')}
+              </LocaleLink>
+            </div>
           </div>
         )}
       </CardContent>

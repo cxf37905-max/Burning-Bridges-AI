@@ -1,5 +1,6 @@
 import { websiteConfig } from '@/config/website';
 import { CreemProvider } from './provider/creem';
+import { PaypalProvider } from './provider/paypal';
 import { StripeProvider } from './provider/stripe';
 import type {
   CheckoutResult,
@@ -18,6 +19,7 @@ const providerRegistry: Partial<
 > = {
   stripe: () => new StripeProvider(),
   creem: () => new CreemProvider(),
+  paypal: () => new PaypalProvider(),
 };
 
 let paymentProvider: PaymentProvider | null = null;
@@ -70,9 +72,14 @@ export const createCreditCheckout = async (
  * @returns Portal result
  */
 export const createCustomerPortal = async (
-  params: CreatePortalParams
+  params: CreatePortalParams,
+  providerName?: PaymentProviderName
 ): Promise<PortalResult> => {
-  const provider = getPaymentProvider();
+  const provider = providerName
+    ? providerRegistry[providerName]?.()
+    : getPaymentProvider();
+  if (!provider)
+    throw new Error(`Unsupported payment provider: ${providerName}.`);
   return provider.createCustomerPortal(params);
 };
 
@@ -83,8 +90,12 @@ export const createCustomerPortal = async (
  */
 export const handleWebhookEvent = async (
   payload: string,
-  signature: string
+  signature: string,
+  providerName: PaymentProviderName,
+  headers?: Headers
 ): Promise<void> => {
-  const provider = getPaymentProvider();
-  await provider.handleWebhookEvent(payload, signature);
+  const factory = providerRegistry[providerName];
+  if (!factory)
+    throw new Error(`Unsupported payment provider: ${providerName}.`);
+  await factory().handleWebhookEvent(payload, signature, headers);
 };

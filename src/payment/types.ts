@@ -56,7 +56,7 @@ export type PaymentStatus =
  */
 export interface Price {
   type: PaymentType;                 // Type of payment (subscription or one_time)
-  priceId: string;                   // Stripe price ID (not product id)
+  priceId: string;                   // 当前支付商的价格或产品 ID
   amount: number;                    // Price amount in currency units (dollars, euros, etc.)
   currency: string;                  // Currency code (e.g., USD)
   interval?: PlanInterval;           // Billing interval for recurring payments
@@ -212,7 +212,11 @@ export interface PaymentProvider {
   /**
    * Handle webhook events
    */
-  handleWebhookEvent(payload: string, signature: string): Promise<void>;
+  handleWebhookEvent(
+    payload: string,
+    signature: string,
+    headers?: Headers
+  ): Promise<void>;
 
   /**
    * Get the payment provider name

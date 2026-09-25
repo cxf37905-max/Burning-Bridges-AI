@@ -92,25 +92,5 @@ export function useFooterLinks(): NestedMenuItem[] {
         },
       ],
     },
-    {
-      title: t('legal.title'),
-      items: [
-        {
-          title: t('legal.items.cookiePolicy'),
-          href: Routes.CookiePolicy,
-          external: false,
-        },
-        {
-          title: t('legal.items.privacyPolicy'),
-          href: Routes.PrivacyPolicy,
-          external: false,
-        },
-        {
-          title: t('legal.items.termsOfService'),
-          href: Routes.TermsOfService,
-          external: false,
-        },
-      ],
-    },
   ];
 }

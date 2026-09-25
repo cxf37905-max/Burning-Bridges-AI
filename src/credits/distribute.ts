@@ -1,7 +1,11 @@
 import { randomUUID } from 'crypto';
 import { getDb } from '@/db';
 import { creditTransaction, payment, user, userCredit } from '@/db/schema';
-import { findPlanByPriceId, getAllPricePlans } from '@/lib/price-plan';
+import {
+  findConfiguredPriceById,
+  findPlanByPriceId,
+  getAllPricePlans,
+} from '@/lib/price-plan';
 import { PlanIntervals } from '@/payment/types';
 import { addDays } from 'date-fns';
 import { and, eq, gt, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
@@ -99,12 +103,8 @@ export async function distributeCreditsToAllUsers() {
         });
       } else if (!pricePlan?.isFree && pricePlan?.credits?.enable) {
         // Check if this is a yearly subscription that needs monthly credits
-        const yearlyPrice = pricePlan?.prices?.find(
-          (p) =>
-            p.priceId === userRecord.priceId &&
-            p.interval === PlanIntervals.YEAR
-        );
-        if (yearlyPrice) {
+        const yearlyPrice = findConfiguredPriceById(userRecord.priceId);
+        if (yearlyPrice?.interval === PlanIntervals.YEAR) {
           yearlyUsers.push({
             userId: userRecord.userId,
             priceId: userRecord.priceId,
@@ -228,6 +228,11 @@ export async function batchAddMonthlyFreeCredits(userIds: string[]) {
   // Use transaction for data consistency
   let processedCount = 0;
   await db.transaction(async (tx) => {
+    for (const userId of [...new Set(userIds)].sort()) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
+      );
+    }
     // Get all user credit records in one query
     const userCredits = await tx
       .select({
@@ -241,10 +246,13 @@ export async function batchAddMonthlyFreeCredits(userIds: string[]) {
     const userCreditMap = new Map(
       userCredits.map((record) => [record.userId, record])
     );
+    if (userCreditMap.size !== userCredits.length) {
+      throw new Error('Multiple credit balance records found in monthly batch');
+    }
 
     // Check which users can receive credits based on transaction history
     const eligibleUserIds: string[] = [];
-    for (const userId of userIds) {
+    for (const userId of [...new Set(userIds)].sort()) {
       const canAdd = await canAddCreditsByType(
         userId,
         CREDIT_TRANSACTION_TYPE.MONTHLY_REFRESH
@@ -267,6 +275,7 @@ export async function batchAddMonthlyFreeCredits(userIds: string[]) {
       id: randomUUID(),
       userId,
       type: CREDIT_TRANSACTION_TYPE.MONTHLY_REFRESH,
+      idempotencyKey: `monthly:${CREDIT_TRANSACTION_TYPE.MONTHLY_REFRESH}:${userId}:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
       amount: credits,
       remainingAmount: credits,
       description: `Free monthly credits: ${credits} for ${now.getFullYear()}-${now.getMonth() + 1}`,
@@ -367,6 +376,11 @@ export async function batchAddLifetimeMonthlyCredits(
     // Use transaction for data consistency
     let processedCount = 0;
     await db.transaction(async (tx) => {
+      for (const userId of [...new Set(userIdsForPrice)].sort()) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
+        );
+      }
       // Get all user credit records in one query
       const userCredits = await tx
         .select({
@@ -380,6 +394,11 @@ export async function batchAddLifetimeMonthlyCredits(
       const userCreditMap = new Map(
         userCredits.map((record) => [record.userId, record])
       );
+      if (userCreditMap.size !== userCredits.length) {
+        throw new Error(
+          `Multiple credit balance records found for lifetime plan ${priceId}`
+        );
+      }
 
       // Check which users can receive credits based on transaction history
       const eligibleUserIds: string[] = [];
@@ -408,6 +427,7 @@ export async function batchAddLifetimeMonthlyCredits(
         id: randomUUID(),
         userId,
         type: CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY,
+        idempotencyKey: `monthly:${CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY}:${userId}:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
         amount: credits,
         remainingAmount: credits,
         description: `Lifetime monthly credits: ${credits} for ${now.getFullYear()}-${now.getMonth() + 1}`,
@@ -508,6 +528,11 @@ export async function batchAddYearlyUsersMonthlyCredits(
     // Use transaction for data consistency
     let processedCount = 0;
     await db.transaction(async (tx) => {
+      for (const userId of [...new Set(userIds)].sort()) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
+        );
+      }
       // Get all user credit records in one query
       const userCredits = await tx
         .select({
@@ -521,6 +546,11 @@ export async function batchAddYearlyUsersMonthlyCredits(
       const userCreditMap = new Map(
         userCredits.map((record) => [record.userId, record])
       );
+      if (userCreditMap.size !== userCredits.length) {
+        throw new Error(
+          `Multiple credit balance records found for subscription plan ${priceId}`
+        );
+      }
 
       // Check which users can receive credits based on transaction history
       const eligibleUserIds: string[] = [];
@@ -549,6 +579,7 @@ export async function batchAddYearlyUsersMonthlyCredits(
         id: randomUUID(),
         userId,
         type: CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,
+        idempotencyKey: `monthly:${CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL}:${userId}:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
         amount: credits,
         remainingAmount: credits,
         description: `Yearly subscription monthly credits: ${credits} for ${now.getFullYear()}-${now.getMonth() + 1}`,
@@ -700,7 +731,10 @@ export async function batchProcessExpiredCreditsForUsers(userIds: string[]) {
 
   // Use transaction for data consistency
   await db.transaction(async (tx) => {
-    for (const userId of userIds) {
+    for (const userId of [...new Set(userIds)].sort()) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
+      );
       // Get all credit transactions that can expire for this user
       const transactions = await tx
         .select()
@@ -743,20 +777,32 @@ export async function batchProcessExpiredCreditsForUsers(userIds: string[]) {
       if (expiredTotal > 0) {
         // Deduct expired credits from balance
         const current = await tx
-          .select()
+          .select({
+            id: userCredit.id,
+            currentCredits: userCredit.currentCredits,
+          })
           .from(userCredit)
           .where(eq(userCredit.userId, userId))
-          .limit(1);
+          .limit(2);
+
+        if (current.length > 1) {
+          throw new Error(
+            `Multiple credit balance records found for user ${userId}`
+          );
+        }
+        if (!current[0]) {
+          throw new Error(`Credit balance record missing for user ${userId}`);
+        }
 
         const newBalance = Math.max(
           0,
-          (current[0]?.currentCredits || 0) - expiredTotal
+          current[0].currentCredits - expiredTotal
         );
 
         await tx
           .update(userCredit)
           .set({ currentCredits: newBalance, updatedAt: now })
-          .where(eq(userCredit.userId, userId));
+          .where(eq(userCredit.id, current[0].id));
 
         // Write expire record
         await tx.insert(creditTransaction).values({

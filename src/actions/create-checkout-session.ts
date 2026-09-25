@@ -67,8 +67,8 @@ export const createCheckoutAction = userActionClient
       //   then the Payment page polls by sessionId until the webhook writes the DB record.
       // For Creem: Creem does NOT replace URL placeholders and has its own
       //   payment confirmation page, so redirect straight to billing.
-      const isCreem = websiteConfig.payment.provider === 'creem';
-      const successUrl = isCreem
+      const usesPaymentSync = websiteConfig.payment.provider !== 'stripe';
+      const successUrl = usesPaymentSync
         ? getUrlWithLocale(
             `${Routes.SettingsBilling}?payment=syncing&syncId=${encodeURIComponent(paymentSyncId)}`,
             locale

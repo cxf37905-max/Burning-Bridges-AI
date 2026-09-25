@@ -83,7 +83,6 @@ All external integrations follow a pluggable provider pattern with factory funct
 
 ### Configuration
 - Centralized app config with feature flags: `src/config/website.tsx`
-- Demo mode: `NEXT_PUBLIC_DEMO_WEBSITE` env var (enables Crisp chat, Turnstile CAPTCHA, looser admin checks)
 - Environment template: `env.example`
 
 ## Code Style

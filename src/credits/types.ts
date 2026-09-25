@@ -46,6 +46,7 @@ export interface CreditTransaction {
   amount: number;                          // Credit amount (positive for earning, negative for spending)
   remainingAmount: number | null;          // Remaining credit amount (for tracking expiration)
   paymentId: string | null;                // Associated invoice ID
+  idempotencyKey?: string | null;          // Unique key preventing duplicate grants
   expirationDate: Date | null;             // Credit expiration date
   expirationDateProcessedAt: Date | null;  // Timestamp when expiration was processed
   createdAt: Date;                         // Transaction creation timestamp

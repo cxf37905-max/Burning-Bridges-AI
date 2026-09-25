@@ -1,6 +1,5 @@
 'use client';
 
-import { isDemoWebsite } from '@/lib/demo';
 import { Routes } from '@/routes';
 import type { NestedMenuItem } from '@/types';
 import {
@@ -31,9 +30,6 @@ import { websiteConfig } from './website';
 export function useSidebarLinks(): NestedMenuItem[] {
   const t = useTranslations('Dashboard');
 
-  // if is demo website, allow user to access admin and user pages, but data is fake
-  const isDemo = isDemoWebsite();
-
   return [
     {
       title: t('dashboard.title'),
@@ -44,7 +40,7 @@ export function useSidebarLinks(): NestedMenuItem[] {
     {
       title: t('admin.title'),
       icon: <SettingsIcon className="size-4 shrink-0" />,
-      authorizeOnly: isDemo ? ['admin', 'user'] : ['admin'],
+      authorizeOnly: ['admin'],
       items: [
         {
           title: t('admin.users.title'),

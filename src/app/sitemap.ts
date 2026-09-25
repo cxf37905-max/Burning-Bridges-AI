@@ -21,7 +21,6 @@ const staticRoutes = [
   '/changelog',
   '/privacy',
   '/terms',
-  '/cookie',
   '/auth/login',
   '/auth/register',
   ...(websiteConfig.blog.enable ? ['/blog'] : []),

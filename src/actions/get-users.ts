@@ -2,8 +2,7 @@
 
 import { getDb } from '@/db';
 import { user } from '@/db/schema';
-import { isDemoWebsite } from '@/lib/demo';
-import { demoReadonlyAdminActionClient } from '@/lib/safe-action';
+import { adminActionClient } from '@/lib/safe-action';
 import {
   and,
   asc,
@@ -55,7 +54,7 @@ const sortFieldMap = {
 } as const;
 
 // Create a safe action for getting users
-export const getUsersAction = demoReadonlyAdminActionClient
+export const getUsersAction = adminActionClient
   .inputSchema(getUsersSchema)
   .action(async ({ parsedInput }) => {
     try {
@@ -106,7 +105,7 @@ export const getUsersAction = demoReadonlyAdminActionClient
       const sortDirection = sortConfig?.desc ? desc : asc;
 
       const db = await getDb();
-      let [items, [{ count }]] = await Promise.all([
+      const [items, [{ count }]] = await Promise.all([
         db
           .select()
           .from(user)
@@ -116,17 +115,6 @@ export const getUsersAction = demoReadonlyAdminActionClient
           .offset(offset),
         db.select({ count: countFn() }).from(user).where(where),
       ]);
-
-      // hide user data in demo website
-      const isDemo = isDemoWebsite();
-      if (isDemo) {
-        items = items.map((item) => ({
-          ...item,
-          name: 'Demo User',
-          email: 'example@mksaas.com',
-          customerId: 'cus_abcdef123456',
-        }));
-      }
 
       return {
         success: true,

@@ -1,6 +1,5 @@
 import { createSafeActionClient } from 'next-safe-action';
 import type { SessionUser } from './auth-types';
-import { isDemoWebsite } from './demo';
 import { getSession } from './server';
 
 // -----------------------------------------------------------------------------
@@ -37,9 +36,7 @@ export const userActionClient = actionClient.use(async ({ next }) => {
 // -----------------------------------------------------------------------------
 // 3. Admin-only client (extends auth client)
 //
-// SECURITY: Always requires admin role, regardless of demo mode.
-// Use `demoReadonlyAdminActionClient` for read-only admin actions
-// that should be accessible to demo users.
+// 始终要求管理员权限
 // -----------------------------------------------------------------------------
 export const adminActionClient = userActionClient.use(async ({ next, ctx }) => {
   if (ctx.user.role !== 'admin') {
@@ -51,26 +48,3 @@ export const adminActionClient = userActionClient.use(async ({ next, ctx }) => {
 
   return next({ ctx });
 });
-
-// -----------------------------------------------------------------------------
-// 4. Demo-aware read-only admin client (extends auth client)
-//
-// Allows non-admin users to access read-only admin actions when running in
-// demo mode. This lets demo visitors explore admin pages with sanitised data
-// while keeping write operations strictly behind `adminActionClient`.
-// -----------------------------------------------------------------------------
-export const demoReadonlyAdminActionClient = userActionClient.use(
-  async ({ next, ctx }) => {
-    const isAdmin = ctx.user.role === 'admin';
-    const isDemo = isDemoWebsite();
-
-    if (!isAdmin && !isDemo) {
-      return {
-        success: false,
-        error: 'Unauthorized',
-      };
-    }
-
-    return next({ ctx });
-  }
-);
