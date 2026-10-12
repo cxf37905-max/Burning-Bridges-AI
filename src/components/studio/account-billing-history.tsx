@@ -47,9 +47,11 @@ export function AccountBillingHistory({
                 <span className="bb-account-status" data-status={order.status}>
                   {order.status === 'paid'
                     ? 'Paid'
-                    : order.status === 'closed'
-                      ? 'Closed'
-                      : 'Pending'}
+                    : order.status === 'refunded'
+                      ? 'Refunded'
+                      : order.status === 'closed'
+                        ? 'Closed'
+                        : 'Pending'}
                 </span>
               </td>
             </tr>

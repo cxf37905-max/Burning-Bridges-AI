@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
-import { authRedirect } from '@/lib/auth-redirect';
+import { authCallbackUrl, authRedirect } from '@/lib/auth-redirect';
 import { readStudioAccount } from '@/studio/account-query';
 import { Input } from '@/components/ui/input';
 import { AuthCard } from './auth-card';
@@ -15,7 +15,7 @@ import { SocialLoginButton } from './social-login-button';
 
 const loginInput = z.object({
   email: z.email('Enter a valid email address.'),
-  password: z.string().min(1, 'Enter your password.'),
+  password: z.string().min(8, 'Use at least 8 characters.').max(128),
 });
 
 export interface LoginFormProps {
@@ -53,13 +53,32 @@ export function LoginForm({
     setPending(true);
     setError('');
     try {
-      const result = await authClient.signIn.email({
+      const credentials = {
         ...values,
-        callbackURL: destination,
-      });
+        callbackURL: authCallbackUrl(destination, window.location.origin),
+      };
+      const result = await authClient.signIn.email(credentials);
       if (result.error) {
-        setError(result.error.message || 'Sign-in failed. Please try again.');
-        return;
+        if (result.error.code !== 'INVALID_EMAIL_OR_PASSWORD') {
+          setError(result.error.message || 'Sign-in failed. Please try again.');
+          return;
+        }
+        // 注册接口负责检查邮箱是否已存在，已有账号不会被覆盖或重设密码。
+        const registration = await authClient.signUp.email({
+          ...credentials,
+          name: values.email.split('@')[0],
+        });
+        if (registration.error) {
+          const accountExists =
+            registration.error.code === 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL' ||
+            registration.error.code === 'USER_ALREADY_EXISTS';
+          setError(
+            accountExists
+              ? result.error.message || 'Invalid email or password.'
+              : registration.error.message || 'Your account could not be created.'
+          );
+          return;
+        }
       }
       await mutate('/api/studio/account');
       if (onAuthenticated && destination === '/#studio') {
@@ -151,7 +170,8 @@ export function LoginForm({
           {pending ? 'Signing in…' : 'Sign in with email'}
         </button>
         <p className="bb-dialog-note">
-          Your account keeps your credits and your recent videos. Your photo
+          New here? We’ll create your account automatically. Your account keeps
+          your credits and your recent videos. Your photo
           stays in the studio while you sign in.
         </p>
       </form>

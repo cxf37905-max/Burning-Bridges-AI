@@ -2,10 +2,11 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { studioOrder } from '@/db/schema';
+import { payment } from '@/db/schema';
+import { websiteConfig } from '@/config/website';
+import { getCreditPackageById } from '@/credits/server';
+import { createCreditCheckout } from '@/payment';
 import { findVideoPack, studioBrand } from './catalog';
-import { assertCheckoutUrl, checkoutUrl } from './payment-validation';
-import { getWaffoClient } from './waffo';
 
 export async function createVideoCheckout(
   user: { id: string; email: string },
@@ -13,63 +14,37 @@ export async function createVideoCheckout(
   requestId: string
 ) {
   const pack = findVideoPack(packId);
-  if (!pack) throw new Error(`Unknown video pack: ${packId}`);
+  if (!pack) throw new Error(`视频套餐不存在：${packId}`);
+  if (websiteConfig.payment.provider !== 'waffo')
+    throw new Error('本站视频积分包需要启用 Waffo Pancake 支付。');
+  const creditPack = getCreditPackageById(pack.creditPackageId);
+  if (!creditPack?.price.priceId)
+    throw new Error(`尚未配置 Waffo 产品 ID：${pack.creditPackageId}`);
   const id = createHash('sha256')
     .update(`${user.id}:${requestId}`)
     .digest('hex')
     .slice(0, 32);
   const db = await getDb();
-  await db
-    .insert(studioOrder)
-    .values({
-      id,
-      userId: user.id,
-      packId,
-      cents: pack.cents,
-      videos: pack.videos,
-    })
-    .onConflictDoNothing();
-  const [order] = await db
-    .select()
-    .from(studioOrder)
-    .where(eq(studioOrder.id, id));
-  if (!order) throw new Error(`Studio order was not created: ${id}`);
-  if (order.userId !== user.id || order.packId !== packId)
-    throw new Error(`Checkout idempotency conflict for order ${id}`);
-  if (order.status !== 'pending')
-    throw new Error(`Checkout is already ${order.status}: ${id}`);
-  if (order.checkoutUrl)
-    return { url: assertCheckoutUrl(order.checkoutUrl), orderId: id };
+  const [existing] = await db.select().from(payment).where(eq(payment.id, id));
+  if (
+    existing &&
+    (existing.userId !== user.id ||
+      existing.priceId !== creditPack.price.priceId)
+  )
+    throw new Error(`结账请求与已有支付记录不一致：${id}`);
+  if (existing && (existing.paid || existing.status !== 'incomplete'))
+    throw new Error(`此支付请求已处理，请重新选择套餐：${id}`);
   const origin = new URL(process.env.NEXT_PUBLIC_BASE_URL || studioBrand.url)
     .origin;
-  const response = await getWaffoClient()
-    .order()
-    .create({
-      paymentRequestId: id,
-      merchantOrderId: id,
-      orderAmount: (order.cents / 100).toFixed(2),
-      orderCurrency: order.currency,
-      orderDescription: `${studioBrand.name} — ${pack.name}`,
-      notifyUrl: `${origin}/api/studio/waffo-webhook`,
-      successRedirectUrl: `${origin}/?checkout=returned#studio`,
-      failedRedirectUrl: `${origin}/pricing?checkout=failed`,
-      cancelRedirectUrl: `${origin}/pricing?checkout=cancelled`,
-      userInfo: { userId: user.id, userEmail: user.email, userTerminal: 'WEB' },
-      paymentInfo: { productName: 'ONE_TIME_PAYMENT' },
-      goodsInfo: {
-        goodsName: `${pack.videos} Burning Bridges AI videos`,
-        goodsUrl: `${origin}/pricing`,
-      },
-    });
-  if (!response.isSuccess()) throw new Error(`Waffo rejected order ${id}`);
-  const result = response.getData();
-  if (!result) throw new Error(`Waffo returned no data for order ${id}`);
-  const url = checkoutUrl(result.orderAction);
-  if (!result.acquiringOrderId)
-    throw new Error(`Waffo acquiring order ID missing for ${id}`);
-  await db
-    .update(studioOrder)
-    .set({ acquiringOrderId: result.acquiringOrderId, checkoutUrl: url })
-    .where(eq(studioOrder.id, id));
-  return { url, orderId: id };
+  // 付款、验签、查单和积分入账全部交给模板的支付接口。
+  const result = await createCreditCheckout({
+    packageId: creditPack.id,
+    priceId: creditPack.price.priceId,
+    customerEmail: user.email,
+    successUrl: `${origin}/?checkout=returned#studio`,
+    cancelUrl: `${origin}/pricing?checkout=cancelled`,
+    locale: 'en',
+    metadata: { userId: user.id, paymentSyncId: id },
+  });
+  return { url: result.url, orderId: id };
 }

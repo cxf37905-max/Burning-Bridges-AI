@@ -2,6 +2,7 @@ import { readStudioAccountRecords } from '@/studio/account-records';
 import { getStudioAvailability } from '@/studio/availability';
 import { AccountPageHeading } from '@/components/studio/account-page-heading';
 import { AccountCreditBalance } from '@/components/studio/account-credit-balance';
+import { purchasedCreditValidityMonths } from '@/credits/policy';
 export default async function CreditsPage() {
   const records = await readStudioAccountRecords();
   const entries = records.transactions;
@@ -17,7 +18,9 @@ export default async function CreditsPage() {
       />
       <p className="bb-account-note">
         Credits are available only through purchase. Registration and signing in
-        do not award credits. Failed video refunds return credits already spent.
+        do not award credits. Purchased credits are valid for{' '}
+        {purchasedCreditValidityMonths} months. Failed video refunds return
+        credits already spent and keep their original expiry date.
       </p>
       <h2 className="bb-account-section-title">Credit history</h2>
       {entries.length ? (

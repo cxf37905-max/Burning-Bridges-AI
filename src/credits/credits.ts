@@ -1,11 +1,14 @@
-import { automaticCreditGrantsEnabled } from './policy';
+import {
+  automaticCreditGrantsEnabled,
+  purchasedCreditValidityMonths,
+} from './policy';
 import { randomUUID } from 'crypto';
 import { websiteConfig } from '@/config/website';
 import { getDb } from '@/db';
 import { creditTransaction, userCredit } from '@/db/schema';
 import { findPlanByPlanId, findPlanByPriceId } from '@/lib/price-plan';
-import { addDays } from 'date-fns';
-import { and, asc, eq, gt, isNull, lt, not, or, sql } from 'drizzle-orm';
+import { addDays, addMonths } from 'date-fns';
+import { and, asc, eq, gt, isNull, lte, not, or, sql } from 'drizzle-orm';
 import { CREDIT_TRANSACTION_TYPE } from './types';
 
 type CreditDatabase = Awaited<ReturnType<typeof getDb>>;
@@ -32,6 +35,7 @@ function getMonthlyCreditKey(type: string, userId: string, date = new Date()) {
  * @returns User's current credit balance
  */
 export async function getUserCredits(userId: string): Promise<number> {
+  await processExpiredCredits(userId);
   const db = await getDb();
   const records = await db
     .select({ currentCredits: userCredit.currentCredits })
@@ -117,6 +121,8 @@ type CreditGrant = {
   paymentId?: string;
   idempotencyKey: string;
   expireDays?: number;
+  expirationDate?: Date;
+  transaction?: CreditDatabaseTransaction;
 };
 export async function addCredits(grant: CreditGrant) {
   if (
@@ -124,6 +130,8 @@ export async function addCredits(grant: CreditGrant) {
     !grant.paymentId
   )
     throw new Error('Only verified purchases can grant new credits.');
+  if (grant.transaction)
+    return grantCreditsInTransaction(grant.transaction, grant);
   const db = await getDb();
   return db.transaction((tx) => grantCreditsInTransaction(tx, grant));
 }
@@ -138,6 +146,7 @@ async function grantCreditsInTransaction(
     paymentId,
     idempotencyKey,
     expireDays,
+    expirationDate,
   }: CreditGrant
 ) {
   if (
@@ -153,7 +162,12 @@ async function grantCreditsInTransaction(
     (!Number.isFinite(expireDays) || expireDays <= 0)
   )
     throw new Error('Invalid expiration: ' + expireDays);
+  if (expirationDate && !Number.isFinite(expirationDate.getTime()))
+    throw new Error(
+      'Invalid expiration date for credit grant: ' + idempotencyKey
+    );
   await lockUserCredits(tx, userId);
+  const now = new Date();
   const transaction = await tx
     .insert(creditTransaction)
     .values({
@@ -165,9 +179,13 @@ async function grantCreditsInTransaction(
       description,
       paymentId,
       idempotencyKey,
-      expirationDate: expireDays ? addDays(new Date(), expireDays) : undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      expirationDate:
+        type === CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE
+          ? addMonths(now, purchasedCreditValidityMonths)
+          : (expirationDate ??
+            (expireDays ? addDays(now, expireDays) : undefined)),
+      createdAt: now,
+      updatedAt: now,
     })
     .onConflictDoNothing({ target: creditTransaction.idempotencyKey })
     .returning({ id: creditTransaction.id });
@@ -202,25 +220,8 @@ async function grantCreditsInTransaction(
     });
   }
 
+  await expireUserCreditsInTransaction(tx, userId, now);
   return true;
-}
-export function addPurchasedCreditsInTransaction(
-  tx: CreditDatabaseTransaction,
-  {
-    userId,
-    amount,
-    orderId,
-  }: { userId: string; amount: number; orderId: string }
-) {
-  if (!orderId) throw new Error('A verified purchase order is required.');
-  return grantCreditsInTransaction(tx, {
-    userId,
-    amount,
-    type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
-    description: 'Waffo credit purchase',
-    paymentId: orderId,
-    idempotencyKey: 'waffo:' + orderId,
-  });
 }
 export async function refundVideoCreditsInTransaction(
   tx: CreditDatabaseTransaction,
@@ -246,6 +247,9 @@ export async function refundVideoCreditsInTransaction(
     description: 'Failed video refund',
     paymentId: videoId,
     idempotencyKey: 'video-refund:' + videoId,
+    expirationDate:
+      debit.expirationDate ??
+      addMonths(debit.createdAt, purchasedCreditValidityMonths),
   });
 }
 
@@ -288,8 +292,8 @@ export async function consumeCreditsInTransaction(
     throw new Error(
       'Invalid credit consumption for user ' + userId + ': ' + amount
     );
-  const now = new Date();
   await lockUserCredits(tx, userId);
+  const now = new Date();
 
   if (idempotencyKey) {
     const [existing] = await tx
@@ -298,6 +302,7 @@ export async function consumeCreditsInTransaction(
       .where(eq(creditTransaction.idempotencyKey, idempotencyKey));
     if (existing) return;
   }
+  await expireUserCreditsInTransaction(tx, userId, now);
   const balances = await tx
     .select({ id: userCredit.id, currentCredits: userCredit.currentCredits })
     .from(userCredit)
@@ -336,10 +341,17 @@ export async function consumeCreditsInTransaction(
     );
 
   let remainingToDeduct = amount;
+  let expirationDate: Date | undefined;
   for (const transaction of transactions) {
     if (remainingToDeduct <= 0) break;
     const remainingAmount = transaction.remainingAmount ?? 0;
     const deductFromThis = Math.min(remainingAmount, remainingToDeduct);
+    if (
+      transaction.expirationDate &&
+      (!expirationDate || transaction.expirationDate < expirationDate)
+    ) {
+      expirationDate = transaction.expirationDate;
+    }
     await tx
       .update(creditTransaction)
       .set({
@@ -367,13 +379,13 @@ export async function consumeCreditsInTransaction(
     amount: -amount,
     description,
     idempotencyKey,
+    expirationDate,
   });
 }
 
 /**
  * Process expired credits
  * @param userId - User ID
- * @deprecated This function is no longer used, see distribute.ts instead
  */
 export async function processExpiredCredits(userId: string) {
   return processExpiredCreditsForUsers([userId]);
@@ -381,73 +393,13 @@ export async function processExpiredCredits(userId: string) {
 
 export async function processExpiredCreditsForUsers(userIds: string[]) {
   const db = await getDb();
-  const now = new Date();
   let processedCount = 0;
   let totalExpiredCredits = 0;
 
   for (const userId of [...new Set(userIds)]) {
     const expiredTotal = await db.transaction(async (tx) => {
       await lockUserCredits(tx, userId);
-      const transactions = await tx
-        .select()
-        .from(creditTransaction)
-        .where(
-          and(
-            eq(creditTransaction.userId, userId),
-            not(eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.USAGE)),
-            not(eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.EXPIRE)),
-            not(isNull(creditTransaction.expirationDate)),
-            isNull(creditTransaction.expirationDateProcessedAt),
-            gt(creditTransaction.remainingAmount, 0),
-            lt(creditTransaction.expirationDate, now)
-          )
-        );
-      const total = transactions.reduce(
-        (sum, transaction) => sum + (transaction.remainingAmount ?? 0),
-        0
-      );
-      if (total === 0) return 0;
-
-      for (const transaction of transactions) {
-        await tx
-          .update(creditTransaction)
-          .set({
-            remainingAmount: 0,
-            expirationDateProcessedAt: now,
-            updatedAt: now,
-          })
-          .where(eq(creditTransaction.id, transaction.id));
-      }
-
-      const balances = await tx
-        .select({
-          id: userCredit.id,
-          currentCredits: userCredit.currentCredits,
-        })
-        .from(userCredit)
-        .where(eq(userCredit.userId, userId))
-        .limit(2);
-      if (balances.length > 1) {
-        throw new Error(
-          `Multiple credit balance records found for user ${userId}`
-        );
-      }
-      if (balances[0]) {
-        await tx
-          .update(userCredit)
-          .set({
-            currentCredits: Math.max(0, balances[0].currentCredits - total),
-            updatedAt: now,
-          })
-          .where(eq(userCredit.id, balances[0].id));
-      }
-      await saveCreditTransaction(tx, {
-        userId,
-        type: CREDIT_TRANSACTION_TYPE.EXPIRE,
-        amount: -total,
-        description: `Expire credits: ${total}`,
-      });
-      return total;
+      return expireUserCreditsInTransaction(tx, userId, new Date());
     });
 
     processedCount++;
@@ -455,6 +407,68 @@ export async function processExpiredCreditsForUsers(userIds: string[]) {
   }
 
   return { processedCount, totalExpiredCredits };
+}
+
+// 调用方已锁定用户余额，清理和扣费必须处于同一事务。
+async function expireUserCreditsInTransaction(
+  tx: CreditDatabaseTransaction,
+  userId: string,
+  now: Date
+) {
+  const transactions = await tx
+    .select()
+    .from(creditTransaction)
+    .where(
+      and(
+        eq(creditTransaction.userId, userId),
+        not(eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.USAGE)),
+        not(eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.EXPIRE)),
+        isNull(creditTransaction.expirationDateProcessedAt),
+        gt(creditTransaction.remainingAmount, 0),
+        lte(creditTransaction.expirationDate, now)
+      )
+    );
+  const total = transactions.reduce(
+    (sum, transaction) => sum + (transaction.remainingAmount ?? 0),
+    0
+  );
+  if (total === 0) return 0;
+
+  for (const transaction of transactions) {
+    await tx
+      .update(creditTransaction)
+      .set({
+        remainingAmount: 0,
+        expirationDateProcessedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(creditTransaction.id, transaction.id));
+  }
+
+  const balances = await tx
+    .select({ id: userCredit.id, currentCredits: userCredit.currentCredits })
+    .from(userCredit)
+    .where(eq(userCredit.userId, userId))
+    .limit(2);
+  if (balances.length > 1) {
+    throw new Error(`Multiple credit balance records found for user ${userId}`);
+  }
+  if (balances[0]) {
+    await tx
+      .update(userCredit)
+      .set({
+        currentCredits: Math.max(0, balances[0].currentCredits - total),
+        updatedAt: now,
+      })
+      .where(eq(userCredit.id, balances[0].id));
+  }
+  await saveCreditTransaction(tx, {
+    userId,
+    type: CREDIT_TRANSACTION_TYPE.EXPIRE,
+    amount: -total,
+    description: `Expire credits: ${total}`,
+  });
+  return total;
 }
 
 /**
@@ -465,9 +479,10 @@ export async function processExpiredCreditsForUsers(userIds: string[]) {
 export async function canAddCreditsByType(
   userId: string,
   creditType: string,
-  grantDate = new Date()
+  grantDate = new Date(),
+  transaction?: CreditDatabaseTransaction
 ) {
-  const db = await getDb();
+  const db = transaction ?? (await getDb());
   const now = grantDate;
   const existingTransaction = await db
     .select()
@@ -577,7 +592,9 @@ export async function addMonthlyFreeCredits(userId: string, planId: string) {
 export async function addSubscriptionCredits(
   userId: string,
   priceId: string,
-  grantDate = new Date()
+  grantDate = new Date(),
+  paymentId?: string,
+  transaction?: CreditDatabaseTransaction
 ) {
   // NOTICE: the price plan maybe disabled, but we still need to add credits for existing users
   const pricePlan = findPlanByPriceId(priceId);
@@ -601,7 +618,8 @@ export async function addSubscriptionCredits(
     !(await canAddCreditsByType(
       userId,
       CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,
-      grantDate
+      grantDate,
+      transaction
     ))
   ) {
     return false;
@@ -611,6 +629,8 @@ export async function addSubscriptionCredits(
     userId,
     amount: credits,
     type: CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,
+    paymentId,
+    transaction,
     description: `Subscription renewal credits: ${credits} for ${grantDate.getFullYear()}-${month}`,
     idempotencyKey: getMonthlyCreditKey(
       CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,
@@ -629,7 +649,9 @@ export async function addSubscriptionCredits(
 export async function addLifetimeMonthlyCredits(
   userId: string,
   priceId: string,
-  grantDate = new Date()
+  grantDate = new Date(),
+  paymentId?: string,
+  transaction?: CreditDatabaseTransaction
 ) {
   // NOTICE: make sure the lifetime plan is not disabled and has credits enabled
   const pricePlan = findPlanByPriceId(priceId);
@@ -653,7 +675,8 @@ export async function addLifetimeMonthlyCredits(
     !(await canAddCreditsByType(
       userId,
       CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY,
-      grantDate
+      grantDate,
+      transaction
     ))
   ) {
     return false;
@@ -663,6 +686,8 @@ export async function addLifetimeMonthlyCredits(
     userId,
     amount: credits,
     type: CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY,
+    paymentId,
+    transaction,
     description: `Lifetime monthly credits: ${credits} for ${grantDate.getFullYear()}-${grantDate.getMonth() + 1}`,
     idempotencyKey: getMonthlyCreditKey(
       CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY,

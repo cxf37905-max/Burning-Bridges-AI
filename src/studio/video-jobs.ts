@@ -1,12 +1,13 @@
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
-import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { getBaseUrl } from '@/lib/urls';
 import { videoExpiresAt, videoHasExpired } from './media-retention';
-import { studioVideo, userCredit } from '@/db/schema';
+import { studioVideo } from '@/db/schema';
 import {
   consumeCreditsInTransaction,
+  getUserCredits,
   refundVideoCreditsInTransaction,
   InsufficientCreditsError,
 } from '@/credits/credits';
@@ -212,16 +213,7 @@ export async function createStudioVideo(
       await advanceOwnedVideo(id, userId, picture);
     return getOwnedVideo(id, userId);
   }
-  const [availableWallet] = await db
-    .select({ credits: userCredit.currentCredits })
-    .from(userCredit)
-    .where(
-      and(
-        eq(userCredit.userId, userId),
-        gte(userCredit.currentCredits, videoCreditCost)
-      )
-    );
-  if (!availableWallet)
+  if ((await getUserCredits(userId)) < videoCreditCost)
     throw new VideoRequestError(
       'You need 100 credits for this video. Get credits to continue.',
       402

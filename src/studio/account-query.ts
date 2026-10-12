@@ -5,6 +5,8 @@ const accountSchema = z.object({
   user: z
     .object({
       name: z.string().nullable(),
+      email: z.string(),
+      image: z.string().nullable(),
       credits: z.number().int().nonnegative(),
     })
     .nullable(),

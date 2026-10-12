@@ -19,15 +19,6 @@ export default async function AccountLayout({
     <div className="bb-site">
       <StudioHeader />
       <main id="main-content" className="bb-shell bb-account-shell">
-        <header className="bb-account-welcome">
-          <span className="bb-section-kicker">
-            YOUR BURNING BRIDGES AI STUDIO
-          </span>
-          <p>
-            {user.name || 'Your account'}
-            <span>{user.email}</span>
-          </p>
-        </header>
         <div className="bb-account-layout">
           <AccountNavigation />
           <div className="bb-account-content">{children}</div>

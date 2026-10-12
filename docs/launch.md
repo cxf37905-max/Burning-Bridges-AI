@@ -29,14 +29,21 @@ pnpm dev --port 3010
 | `CRON_SECRET` | 至少32字符，后台调度Bearer鉴权 |
 | `STORAGE_ENDPOINT` | Cloudflare R2账号HTTPS端点 |
 | `STORAGE_BUCKET_NAME` / `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | 私有R2桶读写凭据 |
-| `WAFFO_API_KEY` / `WAFFO_PRIVATE_KEY` / `WAFFO_PUBLIC_KEY` / `WAFFO_MERCHANT_ID` | 官方SDK格式，沙箱与生产凭据分开 |
-| `WAFFO_ENVIRONMENT` | 默认sandbox，正式production |
+| `NEXT_PUBLIC_PAYMENT_PROVIDER` | 填 `waffo`，统一使用最新版模板的 Pancake 支付接口 |
+| `WAFFO_MERCHANT_ID` / `WAFFO_PRIVATE_KEY` / `WAFFO_STORE_ID` | 同一测试环境下的商户 ID、完整 RSA PEM 私钥和商店 ID；私钥可用 `\n` 表示换行 |
+| `WAFFO_DEBUG` | 测试填 `true`；生产填 `false`。验签公钥由官方 SDK 提供 |
+| `NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_BASIC` | 一次性 USD 产品：$9.90，100 积分，1 个视频 |
+| `NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_STANDARD` | 一次性 USD 产品：$19.90，300 积分，3 个视频 |
+| `NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_PREMIUM` | 一次性 USD 产品：$49.90，900 积分，9 个视频 |
+| `NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_ENTERPRISE` | 一次性 USD 产品：$89.90，1800 积分，18 个视频 |
 
-认证完全复用模板 BetterAuth、用户表与会话，邮箱密码和 Google 登录共用同一账户系统；不接入 Turnstile。支付使用 Waffo；旧 Stripe、Creem、PayPal 公开支付入口已关闭。不要设置 `NEXT_PUBLIC_PAYMENT_PROVIDER=waffo`，模板旧枚举不支持此值。
+认证复用模板 Better Auth、用户表与会话，邮箱密码和 Google 登录共用同一账户系统。支付复用模板 `@waffo/pancake-ts@0.25.0`，设置 `NEXT_PUBLIC_PAYMENT_PROVIDER=waffo`。在 Waffo 测试商店创建并发布四档一次性产品，金额与币种必须和上表一致。旧 Waffo SDK、旧回调和旧入账实现已移除，使用本节配置替换之前的接入说明。
+
+测试付款需要公网 HTTPS 测试站或 HTTPS 隧道，将 `NEXT_PUBLIC_BASE_URL` 设置为实际访问地址。Waffo 后台配置 `/api/webhooks/waffo`，订阅 `order.completed` 和 `refund.succeeded`；回调必须能从公网直接访问，不能被部署访问保护拦截。支付相关变量只放测试环境，修改后重启本地服务或重新部署测试站。单纯预览和邮箱登录仍可使用 localhost。若通过隧道测试 Google 登录，还需在 Google 后台登记隧道域名的回调地址。
 
 ## 数据库
 
-余额与流水统一使用模板原有 `user_credit` 和 `credit_transaction`；新增 `studio_order`、`studio_video` 保存订单与任务。购买、扣费、退款与对应业务状态在同一数据库事务提交，沿用原积分批次扣减逻辑。0014为用户余额加唯一索引；0015按项目尚未上线、无历史数据的确认删除 `studio_wallet`，不保留旧钱包或余额迁移兼容逻辑。SQL已生成，未写入真实 Neon 数据库。
+支付、余额与流水统一使用模板原有 `payment`、`user_credit` 和 `credit_transaction`，视频任务使用 `studio_video`。业务代码已移除旧 `studio_order` 表定义和读写；历史迁移文件保留，本次不执行删除数据库表或修改数据库数据的操作。模板的付款状态、积分批次和余额在同一事务提交，重复回调不会重复入账。购买积分按 12 个自然月到期，生成失败返还积分沿用原到期时间；支付退款按模板规则收回尚未使用的积分并记录流水。
 
 注册、邮箱登录、Google 登录、免费套餐、订阅及定期分发均不会赠送积分。新用户余额为0，100积分生成一条视频；失败退款只返还原扣费，不发放新积分。
 
@@ -64,9 +71,9 @@ pnpm db:migrate
 
 ## Waffo
 
-创建订单：`POST /api/studio/checkout`；通知：`POST https://burningbridgesai.cc/api/studio/waffo-webhook`。
+创建订单：`POST /api/studio/checkout`；模板通知入口：`POST https://测试站域名/api/webhooks/waffo`。前者从服务端会话读取当前用户，后者校验 `X-Waffo-Signature`，检查商店与测试/生产环境，并主动查单后再确认付款或退款。浏览器付款成功回跳不会直接发放积分。
 
-官方SDK验证签名；主动查询确认订单身份、金额、币种及PAY_SUCCESS后事务入账一次。URL返回成功不发次数。付款回首页恢复草稿，用户再次点击生成；余额不足提供套餐入口。现金退款/拒付运营及沙箱回放需上线验收。
+官方 SDK 验证签名，并检查回调商店、环境、用户、产品和站内支付标识；结账前核对平台产品金额与币种，回调主动查询到真实成功付款后才在事务内发放积分。返回成功页面不会直接发放积分。付款后回首页恢复草稿，由用户再次点击生成；余额不足时提供套餐入口。真实沙箱收款、回调入账和退款由用户手动验收。
 
 ## 验证和上线
 

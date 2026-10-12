@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { studioMetadata } from '@/studio/metadata';
 import { websiteConfig } from '@/config/website';
+import { purchasedCreditValidityMonths } from '@/credits/policy';
 
 export const metadata = studioMetadata({
   title: 'Burning Bridges AI Terms of Service',
@@ -91,9 +92,13 @@ export default function TermsPage() {
         total and any disclosed taxes before paying. Purchased credits are
         credited after we verify successful payment. A checkout redirect alone
         does not confirm payment. Buying credits does not automatically start
-        generation. Purchased credits currently have no scheduled expiry. Any
-        new pack price applies only to future purchases. Credits are not cash,
-        are not transferable and cannot be resold or redeemed for money except
+        generation. Purchased credits are valid for{' '}
+        {purchasedCreditValidityMonths} months from purchase. Unused credits
+        expire at the end of that period.
+        Each purchase has its own expiry date; buying another pack does not
+        extend the validity of earlier credits. Any new pack price applies only
+        to future purchases. Credits are not cash, are not transferable and
+        cannot be resold or redeemed for money except
         through an applicable refund.
       </p>
       <p>
@@ -111,7 +116,9 @@ export default function TermsPage() {
         <li>
           A generation confirmed to have failed: its original 100 credits are
           returned to your account balance automatically. This is a credit
-          return, not a refund to your payment method.
+          return, not a refund to your payment method. Returned credits keep
+          their original expiry date; credits that have already expired cannot
+          be used again.
         </li>
         <li>
           A successful payment whose purchased credits were not delivered:

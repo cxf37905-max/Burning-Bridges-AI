@@ -2,6 +2,7 @@ import { websiteConfig } from '@/config/website';
 import { CreemProvider } from './provider/creem';
 import { PaypalProvider } from './provider/paypal';
 import { StripeProvider } from './provider/stripe';
+import { WaffoProvider } from './provider/waffo';
 import type {
   CheckoutResult,
   CreateCheckoutParams,
@@ -20,6 +21,7 @@ const providerRegistry: Partial<
   stripe: () => new StripeProvider(),
   creem: () => new CreemProvider(),
   paypal: () => new PaypalProvider(),
+  waffo: () => new WaffoProvider(),
 };
 
 let paymentProvider: PaymentProvider | null = null;

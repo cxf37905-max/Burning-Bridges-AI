@@ -1,20 +1,6 @@
-import { index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import type { KlingPipeline } from '@/studio/kling-pipeline';
 import { user } from './auth.schema';
-
-export const studioOrder = pgTable('studio_order', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => user.id),
-  packId: text('pack_id').notNull(),
-  cents: integer('cents').notNull(),
-  videos: integer('videos').notNull(),
-  currency: text('currency').notNull().default('USD'),
-  acquiringOrderId: text('acquiring_order_id').unique(),
-  checkoutUrl: text('checkout_url'),
-  status: text('status').$type<'pending' | 'paid' | 'closed'>().notNull().default('pending'),
-  fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({ userIdx: index('studio_order_user_idx').on(table.userId) }));
 
 export const studioVideo = pgTable('studio_video', {
   id: text('id').primaryKey(),

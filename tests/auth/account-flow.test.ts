@@ -1,8 +1,10 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
+import { betterAuth } from 'better-auth';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '../../src/db/schema';
+import { authCallbackUrl } from '../../src/lib/auth-redirect';
 
 const dependencies = vi.hoisted(() => ({ getDb: vi.fn(), sendEmail: vi.fn() }));
 vi.mock('../../src/db', () => ({ getDb: dependencies.getDb }));
@@ -25,7 +27,17 @@ beforeAll(async () => {
     'local-integration-test-secret-at-least-32-characters'
   );
   vi.stubEnv('NEXT_PUBLIC_BASE_URL', origin);
-  ({ auth } = await import('../../src/lib/auth'));
+  vi.stubEnv('GOOGLE_CLIENT_ID', 'integration-test-google-client');
+  vi.stubEnv('GOOGLE_CLIENT_SECRET', 'integration-test-google-secret');
+  const configuredAuth = (await import('../../src/lib/auth')).auth;
+  // 测试模式默认跳过来源校验，显式启用以覆盖真实登录请求的回跳校验。
+  auth = betterAuth({
+    ...configuredAuth.options,
+    advanced: {
+      disableOriginCheck: false,
+      disableCSRFCheck: false,
+    },
+  });
 }, 30_000);
 afterAll(async () => {
   vi.unstubAllEnvs();
@@ -64,7 +76,7 @@ describe('模板认证真实处理器与本地 PostgreSQL', () => {
       email,
       password,
       name: 'Account owner',
-      callbackURL: '/#studio',
+      callbackURL: authCallbackUrl('/#studio', origin),
     });
     expect(signup.status).toBe(200);
     const [registered] = await db.select().from(schema.user);
@@ -80,7 +92,11 @@ describe('模板认证真实处理器与本地 PostgreSQL', () => {
     });
     expect(signupSession?.user.id).toBe(registered.id);
     expect(signupSession?.user.emailVerified).toBe(false);
-    const login = await request('sign-in/email', { email, password });
+    const login = await request('sign-in/email', {
+      email,
+      password,
+      callbackURL: authCallbackUrl('/#studio', origin),
+    });
     expect(login.status).toBe(200);
     const cookie = cookies(login);
     expect(cookie).toContain('session_token=');
@@ -101,6 +117,30 @@ describe('模板认证真实处理器与本地 PostgreSQL', () => {
         .getSetCookie()
         .some((value) => value.includes('session_token=;'))
     ).toBe(true);
+    await expectNoCredits();
+  });
+  it('Google 登录接受本站锚点回跳，拒绝站外回跳且不创建用户或积分', async () => {
+    const usersBefore = await db.select().from(schema.user);
+    const rejected = await request('sign-in/social', {
+      provider: 'google',
+      callbackURL: 'https://untrusted.example/#studio',
+    });
+    expect(rejected.status).toBe(403);
+    const started = await request('sign-in/social', {
+      provider: 'google',
+      callbackURL: authCallbackUrl('/#studio', origin),
+      errorCallbackURL: '/auth/error',
+      disableRedirect: true,
+    });
+    expect(started.status).toBe(200);
+    const authorization = new URL((await started.json()).url);
+    expect(authorization.origin).toBe('https://accounts.google.com');
+    expect(authorization.searchParams.get('redirect_uri')).toBe(
+      origin + '/api/auth/callback/google'
+    );
+    expect(await db.select().from(schema.user)).toHaveLength(
+      usersBefore.length
+    );
     await expectNoCredits();
   });
   it('找回密码使用模板验证令牌，重置后旧密码失效且不送积分', async () => {

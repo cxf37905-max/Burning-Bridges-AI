@@ -1,5 +1,6 @@
 import { PaymentTypes, PlanIntervals } from '@/payment/types';
 import type { PaymentConfig, WebsiteConfig } from '@/types';
+import { videoCreditCost, videoPacks } from '@/studio/catalog';
 
 const paymentPriceIds: Record<
   NonNullable<PaymentConfig['provider']>,
@@ -45,6 +46,17 @@ const paymentPriceIds: Record<
       process.env.NEXT_PUBLIC_PAYPAL_PRICE_CREDITS_ENTERPRISE ??
       'paypal_credits_enterprise',
   },
+  waffo: {
+    proMonthly: process.env.NEXT_PUBLIC_WAFFO_PRODUCT_PRO_MONTHLY ?? '',
+    proYearly: process.env.NEXT_PUBLIC_WAFFO_PRODUCT_PRO_YEARLY ?? '',
+    lifetime: process.env.NEXT_PUBLIC_WAFFO_PRODUCT_LIFETIME ?? '',
+    creditsBasic: process.env.NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_BASIC ?? '',
+    creditsStandard:
+      process.env.NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_STANDARD ?? '',
+    creditsPremium: process.env.NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_PREMIUM ?? '',
+    creditsEnterprise:
+      process.env.NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_ENTERPRISE ?? '',
+  },
 };
 
 export function findPaymentPriceKey(priceId: string) {
@@ -60,10 +72,17 @@ export function findPaymentPriceKey(priceId: string) {
   return null;
 }
 
-// 支付商由环境变量选择：stripe、creem 或 paypal
+// 本站使用与模板相同的 Waffo Pancake 支付商。
 const paymentProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER ||
-  'stripe') as PaymentConfig['provider'];
+  'waffo') as PaymentConfig['provider'];
 const priceIds = paymentPriceIds[paymentProvider];
+if (!priceIds) throw new Error(`支付服务商配置无效：${paymentProvider}`);
+const creditPriceIds = {
+  basic: priceIds.creditsBasic,
+  standard: priceIds.creditsStandard,
+  premium: priceIds.creditsPremium,
+  enterprise: priceIds.creditsEnterprise,
+};
 // 客服邮箱只改这一处，法律页面、联系入口和邮件收件人共用。
 const legalSupportEmail = 'support@burningbridgesai.cc';
 
@@ -178,6 +197,7 @@ export const websiteConfig: WebsiteConfig = {
       },
       pro: {
         id: 'pro',
+        disabled: true,
         prices: [
           {
             type: PaymentTypes.SUBSCRIPTION,
@@ -205,6 +225,7 @@ export const websiteConfig: WebsiteConfig = {
       },
       lifetime: {
         id: 'lifetime',
+        disabled: true,
         prices: [
           {
             type: PaymentTypes.ONE_TIME,
@@ -232,55 +253,22 @@ export const websiteConfig: WebsiteConfig = {
       amount: 0,
       expireDays: 30,
     },
-    packages: {
-      basic: {
-        id: 'basic',
-        popular: false,
-        amount: 100,
-        expireDays: 30,
-        price: {
-          priceId: priceIds.creditsBasic,
-          amount: 990,
-          currency: 'USD',
-          allowPromotionCode: true,
+    // 展示价格与实际入账积分共用视频套餐，购买积分按 12 个自然月到期。
+    packages: Object.fromEntries(
+      videoPacks.map((pack) => [
+        pack.creditPackageId,
+        {
+          id: pack.creditPackageId,
+          name: pack.name,
+          popular: pack.id === 'trio',
+          amount: pack.videos * videoCreditCost,
+          price: {
+            priceId: creditPriceIds[pack.creditPackageId],
+            amount: pack.cents,
+            currency: 'USD',
+          },
         },
-      },
-      standard: {
-        id: 'standard',
-        popular: true,
-        amount: 200,
-        expireDays: 30,
-        price: {
-          priceId: priceIds.creditsStandard,
-          amount: 1490,
-          currency: 'USD',
-          allowPromotionCode: true,
-        },
-      },
-      premium: {
-        id: 'premium',
-        popular: false,
-        amount: 500,
-        expireDays: 30,
-        price: {
-          priceId: priceIds.creditsPremium,
-          amount: 3990,
-          currency: 'USD',
-          allowPromotionCode: true,
-        },
-      },
-      enterprise: {
-        id: 'enterprise',
-        popular: false,
-        amount: 1000,
-        expireDays: 30,
-        price: {
-          priceId: priceIds.creditsEnterprise,
-          amount: 6990,
-          currency: 'USD',
-          allowPromotionCode: true,
-        },
-      },
-    },
+      ])
+    ),
   },
 };

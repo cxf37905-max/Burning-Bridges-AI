@@ -1,41 +1,49 @@
 'use client';
 
-import { useState } from 'react';
-import useSWR from 'swr';
-import { readStudioAccount } from '@/studio/account-query';
-import { CreditPackDialog } from './credit-pack-dialog';
-import { ArrowRight, Check, ShieldCheck } from 'lucide-react';
-
+import { useVideoCheckout } from './use-video-checkout';
+import { VideoPricingDetails } from './video-pricing-details';
 import {
-  formatPrice,
-  videoPacks,
-  videoCreditCost,
-  type PackId,
-} from '@/studio/catalog';
+  ArrowRight,
+  Check,
+  Clock3,
+  Coins,
+  LoaderCircle,
+  RefreshCw,
+} from 'lucide-react';
+import { purchasedCreditValidityMonths } from '@/credits/policy';
 
-export function VideoPricing({ purchasesReady }: { purchasesReady: boolean }) {
-  const [selectedId, setSelectedId] = useState<PackId | null>(null);
-  const { data: account } = useSWR('/api/studio/account', readStudioAccount);
+import { formatPrice, videoPacks, videoCreditCost } from '@/studio/catalog';
+
+export function VideoPricing({
+  purchasesReady,
+  showHeading = true,
+}: {
+  purchasesReady: boolean;
+  showHeading?: boolean;
+}) {
+  const { openCheckout, busy, pendingPackId, error } = useVideoCheckout({
+    purchasesReady,
+    returnTo: '/pricing',
+  });
 
   return (
     <section
       id="pricing"
       className="bb-pricing bb-shell"
-      aria-labelledby="pricing-title"
+      aria-labelledby={showHeading ? 'pricing-title' : undefined}
+      aria-label={showHeading ? undefined : 'Video packs'}
     >
-      <div className="bb-pricing-heading">
-        <div>
-          <span className="bb-section-kicker">ONE-TIME VIDEO PACKS</span>
-          <h2 id="pricing-title">Burning Bridges AI Pricing</h2>
+      {showHeading && (
+        <div className="bb-pricing-heading">
+          <div>
+            <span className="bb-section-kicker">VIDEO PACKS</span>
+            <h2 id="pricing-title">Burning Bridges AI Pricing</h2>
+          </div>
+          <p>Buy credits once. No subscription.</p>
         </div>
-        <p>
-          The generator shows the credit cost before you create your video, so
-          you can see what the selected output requires before you generate.
-        </p>
-      </div>
+      )}
       <p className="bb-pricing-credit-cost">
-        The current HD 720p option uses {videoCreditCost} credits per
-        generation.
+        {videoCreditCost} credits per 20-second HD 720p video.
       </p>
       <div className="bb-price-grid">
         {videoPacks.map((pack) => (
@@ -44,66 +52,60 @@ export function VideoPricing({ purchasesReady }: { purchasesReady: boolean }) {
             className={`bb-price-pack ${pack.id === 'trio' ? 'bb-price-featured' : ''}`}
           >
             {pack.id === 'trio' && (
-              <span className="bb-price-badge">Best for a first night out</span>
+              <span className="bb-price-badge">Most popular</span>
             )}
             <div className="bb-pack-top">
               <h3>{pack.name}</h3>
-              <span>
-                {pack.videos === 1 ? '1 VIDEO' : `${pack.videos} VIDEOS`}
-              </span>
             </div>
             <p className="bb-pack-note">{pack.note}</p>
             <p className="bb-pack-price">
               {formatPrice(pack.cents)}
               <span>USD</span>
             </p>
-            <p className="bb-unit-price">
-              {formatPrice(Math.round(pack.cents / pack.videos))} per video ·
-              paid once
-            </p>
             <ul>
               <li>
-                <Check size={14} />
-                {pack.videos * videoCreditCost} credits · {pack.videos} Burning
-                Bridges AI {pack.videos === 1 ? 'video' : 'videos'}
+                <Coins size={14} aria-hidden="true" />
+                {pack.videos * videoCreditCost} credits
               </li>
               <li>
-                <Check size={14} />
-                20 seconds · 720p MP4 · music included
+                <Check size={14} aria-hidden="true" />
+                {pack.videos} {pack.videos === 1 ? 'video' : 'videos'}
               </li>
               <li>
-                <Check size={14} />
-                No automatic renewal
+                <Clock3 size={14} aria-hidden="true" />
+                Credits valid for {purchasedCreditValidityMonths} months
+              </li>
+              <li>
+                <RefreshCw size={14} aria-hidden="true" />
+                Failed videos: credits returned automatically
               </li>
             </ul>
             <button
               type="button"
               className={`bb-button ${pack.id === 'trio' ? '' : 'bb-button-secondary'}`}
-              onClick={() => {
-                setSelectedId(pack.id);
-              }}
+              onClick={() => openCheckout(pack.id)}
+              disabled={busy || !purchasesReady}
             >
-              Buy credits <ArrowRight size={15} />
+              {busy && pendingPackId === pack.id ? (
+                <>
+                  Opening checkout…
+                  <LoaderCircle size={15} className="bb-spin" aria-hidden="true" />
+                </>
+              ) : (
+                <>
+                  Buy credits <ArrowRight size={15} aria-hidden="true" />
+                </>
+              )}
             </button>
           </article>
         ))}
       </div>
-      <p className="bb-pricing-footnote">
-        <ShieldCheck size={14} />
-        {purchasesReady
-          ? 'Secure checkout with Waffo. Review your total before paying.'
-          : 'Preview pricing. Final packs will be confirmed at launch. No payment is collected in preview.'}
-      </p>
-      <CreditPackDialog
-        key={selectedId || 'single'}
-        open={selectedId !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
-        }}
-        purchasesReady={purchasesReady}
-        balance={account?.user?.credits || 0}
-        initialPackId={selectedId || 'single'}
-      />
+      {error && (
+        <p role="alert" className="bb-form-error">
+          {error}
+        </p>
+      )}
+      <VideoPricingDetails />
     </section>
   );
 }

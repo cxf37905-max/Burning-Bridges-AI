@@ -1,5 +1,6 @@
 import { automaticCreditGrantsEnabled } from './policy';
 import { randomUUID } from 'crypto';
+import { findPaymentPriceKey, websiteConfig } from '@/config/website';
 import { getDb } from '@/db';
 import { creditTransaction, payment, user, userCredit } from '@/db/schema';
 import {
@@ -12,6 +13,49 @@ import { addDays } from 'date-fns';
 import { and, eq, gt, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
 import { canAddCreditsByType } from './credits';
 import { CREDIT_TRANSACTION_TYPE } from './types';
+
+type MonthlyCreditRecipient = {
+  userId: string;
+  priceId: string;
+  paymentId?: string;
+};
+type CreditTransactionDatabase = Parameters<
+  Parameters<Awaited<ReturnType<typeof getDb>>['transaction']>[0]
+>[0];
+
+async function isLinkedPaymentActive(
+  tx: CreditTransactionDatabase,
+  userId: string,
+  priceId: string,
+  paymentId?: string
+) {
+  if (findPaymentPriceKey(priceId)?.provider === 'waffo') {
+    const credits = findPlanByPriceId(priceId)?.credits;
+    if (
+      !websiteConfig.credits.enableCredits ||
+      !credits?.enable ||
+      !Number.isInteger(credits.amount) ||
+      credits.amount <= 0
+    )
+      return false;
+  }
+  if (!paymentId) return true;
+  // 与退款回调共用用户锁，防止先查询到付费状态、退款后又按旧快照发积分。
+  const records = await tx
+    .select({ id: payment.id })
+    .from(payment)
+    .where(
+      and(
+        eq(payment.userId, userId),
+        eq(payment.priceId, priceId),
+        eq(payment.invoiceId, paymentId),
+        eq(payment.paid, true),
+        or(eq(payment.status, 'active'), eq(payment.status, 'completed'))
+      )
+    )
+    .limit(1);
+  return records.length > 0;
+}
 
 /**
  * Distribute credits to all users based on their plan type
@@ -38,6 +82,7 @@ export async function distributeCreditsToAllUsers() {
       status: payment.status,
       paid: payment.paid,
       createdAt: payment.createdAt,
+      invoiceId: payment.invoiceId,
       rowNumber:
         sql<number>`ROW_NUMBER() OVER (PARTITION BY ${payment.userId} ORDER BY ${payment.createdAt} DESC)`.as(
           'row_number'
@@ -65,6 +110,7 @@ export async function distributeCreditsToAllUsers() {
       paymentPaid: latestPaymentQuery.paid,
       paymentStatus: latestPaymentQuery.status,
       paymentCreatedAt: latestPaymentQuery.createdAt,
+      paymentInvoiceId: latestPaymentQuery.invoiceId,
     })
     .from(user)
     .leftJoin(
@@ -84,8 +130,8 @@ export async function distributeCreditsToAllUsers() {
 
   // Separate users by their plan type for batch processing
   const freeUserIds: string[] = [];
-  const lifetimeUsers: Array<{ userId: string; priceId: string }> = [];
-  const yearlyUsers: Array<{ userId: string; priceId: string }> = [];
+  const lifetimeUsers: MonthlyCreditRecipient[] = [];
+  const yearlyUsers: MonthlyCreditRecipient[] = [];
 
   usersWithPayments.forEach((userRecord) => {
     // Check if user has valid payment (active subscription or completed lifetime payment)
@@ -97,12 +143,18 @@ export async function distributeCreditsToAllUsers() {
         userRecord.paymentStatus === 'trialing' ||
         userRecord.paymentStatus === 'completed')
     ) {
+      // Waffo 的月度积分保留原付款关联，其他支付商沿用原有参数和行为。
+      const paymentId =
+        findPaymentPriceKey(userRecord.priceId)?.provider === 'waffo'
+          ? (userRecord.paymentInvoiceId ?? undefined)
+          : undefined;
       // User has valid payment - check what type
       const pricePlan = findPlanByPriceId(userRecord.priceId);
       if (pricePlan?.isLifetime && pricePlan?.credits?.enable) {
         lifetimeUsers.push({
           userId: userRecord.userId,
           priceId: userRecord.priceId,
+          paymentId,
         });
       } else if (!pricePlan?.isFree && pricePlan?.credits?.enable) {
         // Check if this is a yearly subscription that needs monthly credits
@@ -111,6 +163,7 @@ export async function distributeCreditsToAllUsers() {
           yearlyUsers.push({
             userId: userRecord.userId,
             priceId: userRecord.priceId,
+            paymentId,
           });
         }
         // Monthly subscriptions are handled by Stripe webhooks automatically
@@ -337,7 +390,7 @@ export async function batchAddMonthlyFreeCredits(userIds: string[]) {
  * @param users - Array of user objects with userId and priceId
  */
 export async function batchAddLifetimeMonthlyCredits(
-  users: Array<{ userId: string; priceId: string }>
+  users: MonthlyCreditRecipient[]
 ) {
   if (!automaticCreditGrantsEnabled) return;
   if (users.length === 0) {
@@ -347,6 +400,9 @@ export async function batchAddLifetimeMonthlyCredits(
 
   const db = await getDb();
   const now = new Date();
+  const paymentIds = new Map(
+    users.map((recipient) => [recipient.userId, recipient.paymentId])
+  );
 
   // Group users by their priceId to handle different lifetime plans
   const usersByPriceId = new Map<string, string[]>();
@@ -408,9 +464,20 @@ export async function batchAddLifetimeMonthlyCredits(
       // Check which users can receive credits based on transaction history
       const eligibleUserIds: string[] = [];
       for (const userId of userIdsForPrice) {
+        if (
+          !(await isLinkedPaymentActive(
+            tx,
+            userId,
+            priceId,
+            paymentIds.get(userId)
+          ))
+        )
+          continue;
         const canAdd = await canAddCreditsByType(
           userId,
-          CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY
+          CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY,
+          now,
+          tx
         );
         if (canAdd) {
           eligibleUserIds.push(userId);
@@ -432,6 +499,7 @@ export async function batchAddLifetimeMonthlyCredits(
         id: randomUUID(),
         userId,
         type: CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY,
+        paymentId: paymentIds.get(userId),
         idempotencyKey: `monthly:${CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY}:${userId}:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
         amount: credits,
         remainingAmount: credits,
@@ -496,7 +564,7 @@ export async function batchAddLifetimeMonthlyCredits(
  * @param users - Array of user objects with userId and priceId
  */
 export async function batchAddYearlyUsersMonthlyCredits(
-  users: Array<{ userId: string; priceId: string }>
+  users: MonthlyCreditRecipient[]
 ) {
   if (!automaticCreditGrantsEnabled) return;
   if (users.length === 0) {
@@ -506,6 +574,9 @@ export async function batchAddYearlyUsersMonthlyCredits(
 
   const db = await getDb();
   const now = new Date();
+  const paymentIds = new Map(
+    users.map((recipient) => [recipient.userId, recipient.paymentId])
+  );
 
   // Group users by priceId to batch process users with the same plan
   const usersByPriceId = new Map<string, string[]>();
@@ -561,9 +632,20 @@ export async function batchAddYearlyUsersMonthlyCredits(
       // Check which users can receive credits based on transaction history
       const eligibleUserIds: string[] = [];
       for (const userId of userIds) {
+        if (
+          !(await isLinkedPaymentActive(
+            tx,
+            userId,
+            priceId,
+            paymentIds.get(userId)
+          ))
+        )
+          continue;
         const canAdd = await canAddCreditsByType(
           userId,
-          CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL
+          CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,
+          now,
+          tx
         );
         if (canAdd) {
           eligibleUserIds.push(userId);
@@ -585,6 +667,7 @@ export async function batchAddYearlyUsersMonthlyCredits(
         id: randomUUID(),
         userId,
         type: CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,
+        paymentId: paymentIds.get(userId),
         idempotencyKey: `monthly:${CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL}:${userId}:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
         amount: credits,
         remainingAmount: credits,

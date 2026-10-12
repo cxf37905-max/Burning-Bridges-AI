@@ -4,7 +4,7 @@ import useSWR from 'swr';
 import { LoaderCircle } from 'lucide-react';
 import { GoogleIcon } from '@/components/icons/google';
 import { authClient } from '@/lib/auth-client';
-import { authRedirect } from '@/lib/auth-redirect';
+import { authCallbackUrl } from '@/lib/auth-redirect';
 import { readStudioAccount } from '@/studio/account-query';
 
 export function SocialLoginButton({
@@ -23,7 +23,7 @@ export function SocialLoginButton({
     try {
       const result = await authClient.signIn.social({
         provider: 'google',
-        callbackURL: authRedirect(callbackUrl),
+        callbackURL: authCallbackUrl(callbackUrl, window.location.origin),
         errorCallbackURL: '/auth/error',
       });
       if (result.error) {

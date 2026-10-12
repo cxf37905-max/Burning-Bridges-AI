@@ -145,6 +145,7 @@ export function CreditTransactionsTable({
       case CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE:
         return <ShoppingCartIcon className="h-5 w-5" />;
       case CREDIT_TRANSACTION_TYPE.USAGE:
+      case CREDIT_TRANSACTION_TYPE.REFUND:
         return <CoinsIcon className="h-5 w-5" />;
       case CREDIT_TRANSACTION_TYPE.EXPIRE:
         return <ClockIcon className="h-5 w-5" />;
@@ -170,6 +171,8 @@ export function CreditTransactionsTable({
         return t('types.USAGE');
       case CREDIT_TRANSACTION_TYPE.EXPIRE:
         return t('types.EXPIRE');
+      case CREDIT_TRANSACTION_TYPE.REFUND:
+        return t('types.REFUND');
       case CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL:
         return t('types.SUBSCRIPTION_RENEWAL');
       case CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY:
@@ -195,6 +198,7 @@ export function CreditTransactionsTable({
       },
       { label: t('types.USAGE'), value: CREDIT_TRANSACTION_TYPE.USAGE },
       { label: t('types.EXPIRE'), value: CREDIT_TRANSACTION_TYPE.EXPIRE },
+      { label: t('types.REFUND'), value: CREDIT_TRANSACTION_TYPE.REFUND },
       {
         label: t('types.SUBSCRIPTION_RENEWAL'),
         value: CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL,

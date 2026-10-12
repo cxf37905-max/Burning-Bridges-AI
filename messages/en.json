@@ -633,6 +633,7 @@
             "PURCHASE": "Purchased Credits",
             "USAGE": "Consumed Credits",
             "EXPIRE": "Expired Credits",
+            "REFUND": "Refunded Credits",
             "SUBSCRIPTION_RENEWAL": "Subscription Renewal",
             "LIFETIME_MONTHLY": "Lifetime Monthly"
           },

@@ -2,7 +2,7 @@
  * Credit transaction type enum
  */
 export enum CREDIT_TRANSACTION_TYPE {
-  REFUND = 'REFUND', // 返还原任务已扣积分
+  REFUND = 'REFUND', // 生成失败返还积分，或支付退款收回积分
   MONTHLY_REFRESH = 'MONTHLY_REFRESH',        // Credits earned by monthly refresh (free users)
   REGISTER_GIFT = 'REGISTER_GIFT',            // Credits earned by register gift
   PURCHASE_PACKAGE = 'PURCHASE_PACKAGE',      // Credits earned by purchase package

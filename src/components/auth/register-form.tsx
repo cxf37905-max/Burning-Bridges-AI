@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
-import { authRedirect } from '@/lib/auth-redirect';
+import { authCallbackUrl, authRedirect } from '@/lib/auth-redirect';
 import { readStudioAccount } from '@/studio/account-query';
 import { Input } from '@/components/ui/input';
 import { AuthCard } from './auth-card';
@@ -52,7 +52,7 @@ export function RegisterForm({
     try {
       const result = await authClient.signUp.email({
         ...values,
-        callbackURL: destination,
+        callbackURL: authCallbackUrl(destination, window.location.origin),
       });
       if (result.error) {
         setError(result.error.message || 'Your account could not be created.');

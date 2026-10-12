@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ArrowUpRight, AudioLines } from 'lucide-react';
 import { StudioAccount } from './studio-account';
+import { StudioSectionLink } from './studio-section-link';
 import { getStudioAvailability } from '@/studio/availability';
 
 export function StudioHeader() {
@@ -21,10 +22,10 @@ export function StudioHeader() {
           </span>
         </Link>
         <nav className="bb-nav-links" aria-label="Main navigation">
-          <Link href="/#create">Create</Link>
-          <Link href="/#the-video">The video</Link>
-          <Link href="/#how-it-works">How it works</Link>
-          <Link href="/#pricing">Pricing</Link>
+          <StudioSectionLink href="/#how-it-works">
+            How it works
+          </StudioSectionLink>
+          <StudioSectionLink href="/#pricing">Pricing</StudioSectionLink>
         </nav>
         <div className="bb-nav-actions">
           <Suspense
@@ -36,9 +37,9 @@ export function StudioHeader() {
           >
             <StudioAccount authReady={getStudioAvailability().authReady} />
           </Suspense>
-          <Link className="bb-button bb-button-small" href="/#create">
+          <StudioSectionLink className="bb-button bb-button-small" href="/#studio">
             Make my video <ArrowUpRight size={15} />
-          </Link>
+          </StudioSectionLink>
         </div>
       </div>
     </header>

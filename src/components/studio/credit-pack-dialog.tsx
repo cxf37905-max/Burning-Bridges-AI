@@ -1,7 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Check, LoaderCircle } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useVideoCheckout } from './use-video-checkout';
+import { Check, LoaderCircle, LockKeyhole } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,58 +24,22 @@ export function CreditPackDialog({
   purchasesReady,
   balance,
   beforeCheckout,
-  initialPackId = 'single',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   purchasesReady: boolean;
   balance: number;
   beforeCheckout?: () => Promise<void>;
-  initialPackId?: PackId;
 }) {
-  const [packId, setPackId] = useState<PackId>(initialPackId);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const submitting = useRef(false);
-  const checkoutRequest = useRef<{ packId: PackId; requestId: string } | null>(
-    null
-  );
+  const router = useRouter();
+  const [packId, setPackId] = useState<PackId>('trio');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const { busy, error, setError, openCheckout } = useVideoCheckout({
+    purchasesReady,
+    beforeCheckout,
+    returnTo: '/#studio',
+  });
   const pack = videoPacks.find((candidate) => candidate.id === packId)!;
-
-  async function openCheckout() {
-    if (submitting.current || !purchasesReady) return;
-    submitting.current = true;
-    setBusy(true);
-    setError('');
-    if (checkoutRequest.current?.packId !== packId)
-      checkoutRequest.current = { packId, requestId: crypto.randomUUID() };
-    try {
-      await beforeCheckout?.();
-      const response = await fetch('/api/studio/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(checkoutRequest.current),
-      });
-      if (response.status === 401) {
-        window.location.assign('/sign-in');
-        return;
-      }
-      const result = await response.json();
-      if (!response.ok || typeof result.url !== 'string')
-        throw new Error(
-          result.error || 'Checkout could not start. Please try again.'
-        );
-      window.location.assign(result.url);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : 'Checkout could not start. Please try again.'
-      );
-      submitting.current = false;
-      setBusy(false);
-    }
-  }
 
   return (
     <Dialog
@@ -80,16 +47,25 @@ export function CreditPackDialog({
       onOpenChange={(next) => {
         if (!busy) {
           setError('');
-          if (!next) setPackId(initialPackId);
+          if (!next) setPackId('trio');
           onOpenChange(next);
         }
       }}
     >
-      <DialogContent className="bb-dialog">
-        <DialogTitle>Get credits</DialogTitle>
+      <DialogContent
+        ref={dialogRef}
+        tabIndex={-1}
+        className="bb-dialog bb-credit-dialog"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          setPackId('trio');
+          dialogRef.current?.focus();
+        }}
+      >
+        <DialogTitle>GET CREDITS</DialogTitle>
         <DialogDescription>
-          This video uses {videoCreditCost} credits. Your balance is {balance}{' '}
-          credits. Your photo and template stay selected.
+          This video uses {videoCreditCost} credits and you have {balance}. Your
+          photos stay in the studio.
         </DialogDescription>
         <fieldset className="bb-credit-options" disabled={busy}>
           <legend className="sr-only">Credit pack</legend>
@@ -105,43 +81,21 @@ export function CreditPackDialog({
                 checked={packId === candidate.id}
                 onChange={() => setPackId(candidate.id)}
               />
-              <strong>{candidate.videos * videoCreditCost} credits</strong>
-              <span>
+              {candidate.id === 'trio' && (
+                <span className="bb-credit-popular">POPULAR</span>
+              )}
+              <strong>{formatPrice(candidate.cents)}</strong>
+              <span className="bb-credit-video-count">
                 {candidate.videos} {candidate.videos === 1 ? 'video' : 'videos'}
               </span>
-              <b>{formatPrice(candidate.cents)}</b>
-              {packId === candidate.id && <Check size={16} />}
+              {packId === candidate.id && (
+                <span className="bb-credit-check" aria-hidden="true">
+                  <Check size={12} strokeWidth={3} />
+                </span>
+              )}
             </label>
           ))}
         </fieldset>
-        <p className="bb-dialog-note">
-          One-time payment. No subscription. A purchase does not start
-          generation automatically. By purchasing, you accept our{' '}
-          <a
-            className="bb-text-link"
-            href="/terms"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Terms
-          </a>
-          , including the{' '}
-          <a
-            className="bb-text-link"
-            href="/terms#payment-refunds"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            refund policy
-          </a>
-          .
-        </p>
-        {!purchasesReady && (
-          <p className="bb-dialog-note">
-            Checkout opens with video generation. No payment is collected in
-            preview.
-          </p>
-        )}
         {error && (
           <p role="alert" className="bb-form-error">
             {error}
@@ -150,15 +104,48 @@ export function CreditPackDialog({
         <button
           type="button"
           className="bb-button bb-dialog-pay"
-          onClick={openCheckout}
+          onClick={() => openCheckout(packId)}
           disabled={busy || !purchasesReady}
         >
-          {busy && <LoaderCircle size={17} className="bb-spin" />}
-          {busy
-            ? 'Opening checkout…'
-            : `Get ${pack.videos * videoCreditCost} credits · ${formatPrice(pack.cents)}`}
+          {busy ? (
+            <LoaderCircle size={17} className="bb-spin" aria-hidden="true" />
+          ) : (
+            <LockKeyhole size={17} aria-hidden="true" />
+          )}
+          {busy ? 'Opening checkout…' : `Pay ${formatPrice(pack.cents)}`}
         </button>
-        <p className="bb-local-note">Payments processed securely by Waffo.</p>
+        <p className="bb-credit-footer">
+          One-time payment, no subscription. Secure checkout by Waffo.{' '}
+          <Link
+            href="/pricing"
+            aria-disabled={busy}
+            onNavigate={async (event) => {
+              if (busy) {
+                event.preventDefault();
+                return;
+              }
+              if (!beforeCheckout) {
+                onOpenChange(false);
+                return;
+              }
+              event.preventDefault();
+              setError('');
+              try {
+                await beforeCheckout();
+                onOpenChange(false);
+                router.push('/pricing');
+              } catch (reason) {
+                setError(
+                  reason instanceof Error
+                    ? reason.message
+                    : 'Your photo could not be saved. Please try again.'
+                );
+              }
+            }}
+          >
+            Pricing details
+          </Link>
+        </p>
       </DialogContent>
     </Dialog>
   );

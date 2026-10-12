@@ -13,7 +13,6 @@ import {
   vi,
 } from 'vitest';
 import {
-  studioOrder,
   studioVideo,
   userCredit,
   creditTransaction,
@@ -24,7 +23,6 @@ const dependencies = vi.hoisted(() => ({
   submit: vi.fn(),
   read: vi.fn(),
   photo: vi.fn(),
-  inquiry: vi.fn(),
   compose: vi.fn(),
 }));
 vi.mock('../../src/db', () => ({ getDb: dependencies.getDb }));
@@ -33,9 +31,6 @@ vi.mock('../../src/studio/photo-storage', () => ({
 }));
 vi.mock('../../src/studio/video-storage', () => ({
   composeStudioVideo: dependencies.compose,
-}));
-vi.mock('../../src/studio/waffo', () => ({
-  getWaffoClient: () => ({ order: () => ({ inquiry: dependencies.inquiry }) }),
 }));
 vi.mock('../../src/studio/fal', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/studio/fal')>()),
@@ -49,7 +44,6 @@ import {
   refreshStudioVideo,
   publicVideoJob,
 } from '../../src/studio/video-jobs';
-import { fulfillVideoPayment } from '../../src/studio/fulfill-payment';
 
 const postgres = new PGlite();
 const db = drizzle(postgres);
@@ -85,7 +79,7 @@ beforeEach(async () => {
     'https://results.example/finished.mp4'
   );
   await postgres.exec(
-    'TRUNCATE studio_video, studio_order, user_credit, credit_transaction;'
+    'TRUNCATE studio_video, user_credit, credit_transaction;'
   );
   for (const [userId, currentCredits] of [
     ['alice', 200],
@@ -506,49 +500,5 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
         'DROP TRIGGER reject_refund ON user_credit; DROP FUNCTION reject_wallet_update();'
       );
     }
-  });
-  it('同一个已付款订单重复通知，只入账一次', async () => {
-    await db.insert(studioOrder).values({
-      id: 'paid-order',
-      userId: 'alice',
-      packId: 'trio',
-      cents: 1990,
-      videos: 3,
-      acquiringOrderId: 'provider-order',
-    });
-    dependencies.inquiry.mockResolvedValue({
-      isSuccess: () => true,
-      getData: () => ({
-        paymentRequestId: 'paid-order',
-        merchantOrderId: 'paid-order',
-        acquiringOrderId: 'provider-order',
-        orderAmount: '19.90',
-        orderCurrency: 'USD',
-        orderStatus: 'PAY_SUCCESS',
-      }),
-    });
-    const notification = {
-      result: { paymentRequestId: 'paid-order' },
-    } as Parameters<typeof fulfillVideoPayment>[0];
-    await fulfillVideoPayment(notification);
-    await fulfillVideoPayment(notification);
-    expect(await balance()).toBe(500);
-    const [paid] = await db
-      .select()
-      .from(studioOrder)
-      .where(
-        and(eq(studioOrder.id, 'paid-order'), eq(studioOrder.status, 'paid'))
-      );
-    expect(paid.fulfilledAt).toBeInstanceOf(Date);
-    const grants = await db
-      .select()
-      .from(creditTransaction)
-      .where(eq(creditTransaction.idempotencyKey, 'waffo:paid-order'));
-    expect(grants).toHaveLength(1);
-    expect(grants[0]).toMatchObject({
-      amount: 300,
-      remainingAmount: 300,
-      type: 'PURCHASE_PACKAGE',
-    });
   });
 });

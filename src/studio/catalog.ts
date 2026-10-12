@@ -8,24 +8,35 @@ export const studioBrand = {
 export const videoPacks = [
   {
     id: 'single',
+    creditPackageId: 'basic',
     name: 'Single',
     videos: 1,
     cents: 990,
-    note: 'Make your entrance.',
+    note: 'Try one video.',
   },
   {
     id: 'trio',
+    creditPackageId: 'standard',
     name: 'Starter',
     videos: 3,
     cents: 1990,
-    note: 'Try a different side of you.',
+    note: 'Try a few photos.',
   },
   {
     id: 'creator',
+    creditPackageId: 'premium',
     name: 'Creator',
     videos: 9,
     cents: 4990,
-    note: 'Keep the group chat busy.',
+    note: 'For friends and retakes.',
+  },
+  {
+    id: 'pro',
+    creditPackageId: 'enterprise',
+    name: 'Pro',
+    videos: 18,
+    cents: 8990,
+    note: 'For regular creators.',
   },
 ] as const;
 

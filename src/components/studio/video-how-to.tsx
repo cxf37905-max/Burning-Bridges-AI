@@ -44,10 +44,6 @@ export function VideoHowTo() {
           ))}
         </div>
         <div className="bb-section-action">
-          <p>
-            No prompt writing. No manual motion matching. No video editing
-            required.
-          </p>
           <a className="bb-button" href="#create">
             Create my Burning Bridges video <ArrowUpRight size={16} />
           </a>

@@ -1,6 +1,4 @@
-import { eq } from 'drizzle-orm';
-import { getDb } from '@/db';
-import { userCredit } from '@/db/schema';
+import { getUserCredits } from '@/credits/credits';
 import { getStudioUser } from '@/studio/auth';
 import { getStudioAvailability } from '@/studio/availability';
 
@@ -13,13 +11,17 @@ export async function GET() {
       { user: null, auth },
       { headers: { 'Cache-Control': 'private, no-store' } }
     );
-  const db = await getDb();
-  const [wallet] = await db
-    .select({ credits: userCredit.currentCredits })
-    .from(userCredit)
-    .where(eq(userCredit.userId, user.id));
+  const credits = await getUserCredits(user.id);
   return Response.json(
-    { user: { name: user.name, credits: wallet?.credits || 0 }, auth },
+    {
+      user: {
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        credits,
+      },
+      auth,
+    },
     { headers: { 'Cache-Control': 'private, no-store' } }
   );
 }

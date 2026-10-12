@@ -27,11 +27,12 @@ const publicPages = new Set([
 
 export default function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  // 仅开放产品接口和模板认证；旧支付、赠送积分与示例 API 保持关闭。
+  // 开放产品、认证和模板 Waffo 回调；其他支付商与示例 API 保持关闭。
   if (pathname.startsWith('/api/')) {
     if (
       pathname.startsWith('/api/studio/') ||
       pathname.startsWith('/api/auth/') ||
+      pathname === '/api/webhooks/waffo' ||
       pathname === '/api/storage/upload'
     )
       return NextResponse.next();

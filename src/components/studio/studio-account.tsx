@@ -1,12 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import useSWR from 'swr';
-import { signOutOfStudio } from '@/studio/auth-actions';
 import { readStudioAccount } from '@/studio/account-query';
 
+import { StudioAccountMenu } from './studio-account-menu';
 import { StudioSigninDialog } from './studio-signin-dialog';
 
 export function StudioAccount({
@@ -61,13 +60,5 @@ export function StudioAccount({
         <span>credits available</span>
       </div>
     );
-  return (
-    <div className="bb-account">
-      <Link href="/settings/credits">{data.user.credits} credits</Link>
-      <Link href="/dashboard">My account</Link>
-      <form action={signOutOfStudio}>
-        <button type="submit">Sign out</button>
-      </form>
-    </div>
-  );
+  return <StudioAccountMenu user={data.user} />;
 }

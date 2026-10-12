@@ -58,6 +58,7 @@ export function CreditDetailViewer({ transaction }: CreditDetailViewerProps) {
       case CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE:
         return <ShoppingCartIcon className="h-5 w-5" />;
       case CREDIT_TRANSACTION_TYPE.USAGE:
+      case CREDIT_TRANSACTION_TYPE.REFUND:
         return <CoinsIcon className="h-5 w-5" />;
       case CREDIT_TRANSACTION_TYPE.EXPIRE:
         return <ClockIcon className="h-5 w-5" />;
@@ -83,6 +84,8 @@ export function CreditDetailViewer({ transaction }: CreditDetailViewerProps) {
         return t('types.USAGE');
       case CREDIT_TRANSACTION_TYPE.EXPIRE:
         return t('types.EXPIRE');
+      case CREDIT_TRANSACTION_TYPE.REFUND:
+        return t('types.REFUND');
       case CREDIT_TRANSACTION_TYPE.SUBSCRIPTION_RENEWAL:
         return t('types.SUBSCRIPTION_RENEWAL');
       case CREDIT_TRANSACTION_TYPE.LIFETIME_MONTHLY:

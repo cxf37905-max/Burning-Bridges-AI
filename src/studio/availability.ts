@@ -1,4 +1,5 @@
 import 'server-only';
+import { websiteConfig } from '@/config/website';
 
 export function getStudioAvailability() {
   const authReady = Boolean(
@@ -14,10 +15,14 @@ export function getStudioAvailability() {
         (process.env.GOOGLE_CLIENT_SECRET || process.env.AUTH_GOOGLE_SECRET)
     );
   const paymentReady = Boolean(
-    process.env.WAFFO_API_KEY &&
+    websiteConfig.payment.provider === 'waffo' &&
       process.env.WAFFO_PRIVATE_KEY &&
-      process.env.WAFFO_PUBLIC_KEY &&
-      process.env.WAFFO_MERCHANT_ID
+      process.env.WAFFO_MERCHANT_ID &&
+      process.env.WAFFO_STORE_ID &&
+      [undefined, 'true', 'false'].includes(process.env.WAFFO_DEBUG) &&
+      Object.values(websiteConfig.credits.packages).every(
+        (pack) => pack.price.priceId
+      )
   );
   // 上线开关用于在真实样片、计费和政策完成验证后开放付费服务。
   const generationReady =

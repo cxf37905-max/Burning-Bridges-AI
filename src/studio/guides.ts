@@ -24,7 +24,7 @@ export const studioGuides = [
       {
         heading: 'Review the video price before creating',
         paragraphs: [
-          'Burning Bridges AI video packs are designed as one-time purchases: $9.90 for one take, $19.90 for three, or $49.90 for nine. The three-take pack works out to $6.63 per video after rounding. Packs do not automatically renew.',
+          'Burning Bridges AI video packs are designed as one-time purchases: $9.90 for one take, $19.90 for three, $49.90 for nine, or $89.90 for eighteen. The three-take pack works out to $6.63 per video after rounding. Packs do not automatically renew.',
           'Checkout is processed by Waffo once purchases open. A redirect from a payment page is not proof that payment succeeded; your account receives videos only after the server verifies the payment. No money is collected in the current studio preview.',
         ],
       },
