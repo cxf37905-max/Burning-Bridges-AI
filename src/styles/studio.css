@@ -213,7 +213,7 @@
   color: var(--bb-muted);
   max-width: 79ch;
   margin: 12px auto 0;
-  font-size: 13px;
+  font-size: 18px;
   line-height: 1.7;
 }
 .bb-workspace {
@@ -285,7 +285,7 @@
 .bb-effect-caption p {
   margin-top: 5px;
   color: var(--bb-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bb-effect-caption a {
   display: inline-flex;
@@ -324,7 +324,7 @@
   align-items: center;
   gap: 7px;
   margin-bottom: 15px;
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 1.7px;
   font-weight: 500;
 }
@@ -337,7 +337,7 @@
 }
 .bb-section-head > p {
   color: var(--bb-muted);
-  font-size: 12px;
+  font-size: 16px;
 }
 .bb-studio {
   scroll-margin-top: 20px;
@@ -441,7 +441,7 @@
 .bb-photo-help {
   color: var(--bb-muted);
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .bb-selected-photo {
@@ -704,7 +704,7 @@
   align-items: start;
   color: var(--bb-muted);
   margin-top: 11px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 .bb-consent input {
@@ -782,7 +782,7 @@
 .bb-steps p {
   color: var(--bb-muted);
   max-width: 36ch;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.9;
 }
 .bb-pricing {
@@ -802,7 +802,7 @@
 }
 .bb-pricing-heading > p {
   color: var(--bb-muted);
-  font-size: 11px;
+  font-size: 16px;
 }
 .bb-price-grid {
   display: grid;
@@ -827,7 +827,7 @@
   border-radius: 4px;
   color: var(--bb-bg);
   background: var(--bb-lime);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
 }
 .bb-pack-top {
@@ -843,13 +843,13 @@
   padding: 4px 7px;
   border-radius: 3px;
   border: 1px solid var(--bb-line);
-  font-size: 7px;
+  font-size: 12px;
   letter-spacing: 0.5px;
 }
 .bb-pack-note {
   color: var(--bb-muted);
   margin-top: 9px;
-  font-size: 10px;
+  font-size: 14px;
 }
 .bb-pack-price {
   margin-top: 26px;
@@ -861,7 +861,7 @@
 .bb-pack-price > span {
   color: var(--bb-muted);
   margin-left: 8px;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0;
   font-family: var(--font-noto-sans);
   font-weight: 400;
@@ -869,7 +869,7 @@
 .bb-unit-price {
   color: var(--bb-muted);
   margin-top: 6px;
-  font-size: 9px;
+  font-size: 12px;
 }
 .bb-price-pack ul {
   list-style: none;
@@ -883,7 +883,7 @@
   gap: 8px;
   color: var(--bb-muted);
   margin-bottom: 10px;
-  font-size: 10px;
+  font-size: 14px;
 }
 .bb-price-pack li svg {
   color: var(--bb-lime);
@@ -899,7 +899,7 @@
   gap: 6px;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 12px;
 }
 .bb-faq {
   display: grid;
@@ -911,7 +911,7 @@
 .bb-faq-heading > p {
   color: var(--bb-muted);
   margin-top: 22px;
-  font-size: 12px;
+  font-size: 16px;
 }
 .bb-faq-heading > a {
   margin-top: 24px;
@@ -927,7 +927,7 @@
   list-style: none;
   cursor: pointer;
   padding: 19px 0;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
 }
 .bb-faq-list summary::-webkit-details-marker {
@@ -946,7 +946,7 @@
   color: var(--bb-muted);
   padding-bottom: 21px;
   max-width: 65ch;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.9;
 }
 .bb-final-cta {
@@ -971,7 +971,7 @@
 .bb-final-cta p {
   color: var(--bb-muted);
   margin-top: 15px;
-  font-size: 9px;
+  font-size: 12px;
 }
 .bb-cta-art {
   color: var(--bb-lime);
@@ -995,13 +995,13 @@
 .bb-footer-main p {
   color: var(--bb-muted);
   margin-top: 13px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .bb-footer-links {
   display: grid;
   gap: 9px;
   color: var(--bb-muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .bb-footer-links a {
   display: flex;
@@ -1021,6 +1021,9 @@
 .bb-footer-bottom > div {
   display: flex;
   gap: 18px;
+}
+.bb-footer-bottom a {
+  font-size: 14px;
 }
 .bb-dialog {
   --bb-bg: oklch(0.145 0.008 140);
@@ -1265,7 +1268,7 @@
   }
   .bb-price-pack li {
     align-items: start;
-    font-size: 9px;
+    font-size: 14px;
   }
   .bb-faq {
     gap: 35px;
@@ -1314,7 +1317,7 @@
   }
   .bb-section-kicker {
     margin-bottom: 13px;
-    font-size: 7px;
+    font-size: 12px;
     letter-spacing: 1.3px;
   }
   .bb-section-head {
@@ -1340,7 +1343,7 @@
   }
   .bb-steps p {
     max-width: 45ch;
-    font-size: 12px;
+    font-size: 14px;
   }
   .bb-pricing {
     padding-block: 15px 50px;
@@ -1366,26 +1369,26 @@
     font-size: 25px;
   }
   .bb-pack-top > span {
-    font-size: 9px;
+    font-size: 12px;
   }
   .bb-pack-note {
-    font-size: 12px;
+    font-size: 14px;
   }
   .bb-pack-price {
     font-size: 51px;
   }
   .bb-unit-price {
-    font-size: 11px;
+    font-size: 12px;
   }
   .bb-price-pack li {
-    font-size: 12px;
+    font-size: 14px;
   }
   .bb-price-pack > button {
     font-size: 12px;
   }
   .bb-pricing-footnote {
     align-items: start;
-    font-size: 9px;
+    font-size: 12px;
   }
   .bb-pricing-footnote svg {
     flex-shrink: 0;
@@ -1401,14 +1404,14 @@
   }
   .bb-faq-heading > p {
     margin-top: 15px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .bb-faq-list summary {
     padding-block: 18px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .bb-faq-list details p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .bb-final-cta {
     padding: 31px 25px;
@@ -1420,7 +1423,7 @@
     font-size: 30px;
   }
   .bb-final-cta .bb-section-kicker {
-    font-size: 6px;
+    font-size: 12px;
   }
   .bb-cta-art {
     position: absolute;
@@ -1440,10 +1443,10 @@
   }
   .bb-footer-links {
     gap: 12px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .bb-footer-main p {
-    font-size: 12px;
+    font-size: 14px;
   }
   .bb-footer-bottom {
     flex-direction: column;
@@ -1516,7 +1519,7 @@
   .bb-hero-description {
     margin-top: 10px;
     max-width: 58ch;
-    font-size: 12px;
+    font-size: 18px;
   }
   .bb-workspace {
     grid-template-columns: 1.15fr 1fr;
@@ -1558,7 +1561,7 @@
   }
   .bb-photo-help {
     max-width: 48ch;
-    font-size: 9px;
+    font-size: 12px;
   }
   .bb-effect {
     grid-column: 2;
@@ -1625,7 +1628,7 @@
     margin-top: 2px;
   }
   .bb-consent {
-    font-size: 10px;
+    font-size: 12px;
   }
   .bb-local-note {
     font-size: 9px;
@@ -2078,7 +2081,7 @@
 .bb-content-heading p {
   color: var(--bb-muted);
   margin-top: 14px;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.9;
 }
 .bb-hero,
@@ -2100,8 +2103,11 @@
 .bb-template-showcase p {
   max-width: 70ch;
   color: var(--bb-muted);
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.9;
+}
+.bb-template-showcase p {
+  font-size: 14px;
 }
 .bb-story-section,
 .bb-comparison-section,
@@ -2135,7 +2141,7 @@
 }
 .bb-quick-answer p {
   max-width: 70ch;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.9;
 }
 .bb-comparison-section {
@@ -2152,7 +2158,7 @@
   table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.7;
 }
 .bb-comparison-table th,
@@ -2224,7 +2230,7 @@
   padding: 0;
   margin: 0;
   color: var(--bb-muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .bb-photo-guidance-columns li {
   display: flex;
@@ -2252,16 +2258,16 @@
 .bb-pricing-credit-cost {
   margin-block: -14px 32px;
   color: var(--bb-muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 .bb-final-cta .bb-final-copy {
   max-width: 65ch;
-  font-size: 12px;
+  font-size: 16px;
   margin-block: 0 16px;
 }
 .bb-final-cta .bb-final-specs {
   color: var(--bb-text);
-  font-size: 12px;
+  font-size: 14px;
   margin-block: 0 24px;
 }
 .bb-footer-main p {
@@ -2296,7 +2302,7 @@
   .bb-comparison-table th,
   .bb-comparison-table td {
     padding: 14px 10px;
-    font-size: 11px;
+    font-size: 14px;
   }
   .bb-comparison-table tr > :first-child {
     width: 25%;
@@ -2333,7 +2339,7 @@
   display: block;
   color: var(--bb-lime);
   margin-top: 14px;
-  font-size: 8px;
+  font-size: 11px;
 }
 .bb-motion-grid h3 {
   margin-top: 5px;
@@ -2342,7 +2348,7 @@
 .bb-motion-grid p {
   color: var(--bb-muted);
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.9;
 }
 .bb-how-section {
@@ -2359,7 +2365,7 @@
   margin-bottom: 14px;
 }
 .bb-steps p {
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.9;
 }
 .bb-photo-tips {
@@ -2377,7 +2383,7 @@
   padding-left: 20px;
   list-style: disc;
   color: var(--bb-muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.9;
 }
 .bb-photo-tips li + li {
@@ -2399,7 +2405,7 @@
 .bb-guides-grid p {
   color: var(--bb-muted);
   margin-block: 14px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.9;
 }
 .bb-guides-grid .bb-text-link {
@@ -2424,12 +2430,5 @@
   .bb-guides-grid {
     grid-template-columns: 1fr;
     gap: 22px;
-  }
-  .bb-content-heading p,
-  .bb-motion-grid p,
-  .bb-steps p,
-  .bb-photo-tips ul,
-  .bb-guides-grid p {
-    font-size: 12px;
   }
 }
