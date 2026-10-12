@@ -14,7 +14,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['ffmpeg-static'],
   outputFileTracingIncludes: {
     '/api/studio/**': [
-      './node_modules/ffmpeg-static/ffmpeg*',
+      // pnpm 顶层依赖是符号链接，部署资源必须从实际包目录收集。
+      './node_modules/.pnpm/ffmpeg-static@*/node_modules/ffmpeg-static/ffmpeg*',
       './public/studio/reference/*-ref-audio.m4a',
     ],
   },

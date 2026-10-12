@@ -1,7 +1,7 @@
-import { Metadata as brandMetadata } from '../../messages/en.json';
+import messages from '../../messages/en.json';
 
 export const studioBrand = {
-  ...brandMetadata,
+  ...messages.Metadata,
   url: 'https://burningbridgesai.cc',
 } as const;
 

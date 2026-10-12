@@ -78,6 +78,8 @@ export async function renderKlingVideoFiles(
     '2:a:0',
     '-c:v',
     'libx264',
+    '-r',
+    String(fps),
     '-preset',
     'veryfast',
     '-crf',
