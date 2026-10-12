@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:vercel": "node scripts/build-vercel.mjs",
     "build:analyze": "next experimental-analyze",
     "start": "next start",
     "postinstall": "fumadocs-mdx",
