@@ -1,9 +1,10 @@
 import { resolve } from 'node:path';
-import { loadEnvConfig } from '@next/env';
+import nextEnv from '@next/env';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 
+const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
 
 const databaseUrl = process.env.DATABASE_URL;
