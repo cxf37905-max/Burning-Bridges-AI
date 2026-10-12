@@ -1,294 +1,168 @@
 'use client';
-
-import { validateCaptchaAction } from '@/actions/validate-captcha';
-import { AuthCard } from '@/components/auth/auth-card';
-import { FormError } from '@/components/shared/form-error';
-import { FormSuccess } from '@/components/shared/form-success';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { websiteConfig } from '@/config/website';
-import { authClient } from '@/lib/auth-client';
-import { getPathWithLocale } from '@/lib/urls';
-import { DEFAULT_LOGIN_REDIRECT, Routes } from '@/routes';
+import { useId, useState } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { EyeIcon, EyeOffIcon, Loader2Icon } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import { useSearchParams } from 'next/navigation';
-import { useRef, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
-import * as z from 'zod';
-import { Captcha } from '../shared/captcha';
+import { z } from 'zod';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
+import { authRedirect } from '@/lib/auth-redirect';
+import { readStudioAccount } from '@/studio/account-query';
+import { Input } from '@/components/ui/input';
+import { AuthCard } from './auth-card';
 import { SocialLoginButton } from './social-login-button';
 
-interface RegisterFormProps {
+const registrationInput = z.object({
+  name: z.string().trim().min(1, 'Enter your name.').max(100),
+  email: z.email('Enter a valid email address.'),
+  password: z.string().min(8, 'Use at least 8 characters.').max(128),
+});
+
+export function RegisterForm({
+  callbackUrl,
+  embedded,
+  onLogin,
+  onAuthenticated,
+}: {
   callbackUrl?: string;
-}
-
-export const RegisterForm = ({
-  callbackUrl: propCallbackUrl,
-}: RegisterFormProps) => {
-  const t = useTranslations('AuthPage.register');
+  embedded?: boolean;
+  onLogin?: () => void;
+  onAuthenticated?: () => void;
+}) {
+  const router = useRouter();
+  const { mutate } = useSWRConfig();
+  const formId = useId();
   const searchParams = useSearchParams();
-  const paramCallbackUrl = searchParams.get('callbackUrl');
-  // Use prop callback URL or param callback URL if provided, otherwise use the default login redirect
-  const locale = useLocale();
-  const defaultCallbackUrl = getPathWithLocale(DEFAULT_LOGIN_REDIRECT, locale);
-  // console.log('register form, propCallbackUrl', propCallbackUrl);
-  // console.log('register form, paramCallbackUrl', paramCallbackUrl);
-  // console.log('register form, defaultCallbackUrl', defaultCallbackUrl);
-  const callbackUrl = propCallbackUrl || paramCallbackUrl || defaultCallbackUrl;
-
-  const [error, setError] = useState<string | undefined>('');
-  const [success, setSuccess] = useState<string | undefined>('');
-  const [isPending, setIsPending] = useState(false);
+  const destination = authRedirect(
+    callbackUrl || searchParams.get('callbackUrl')
+  );
+  const { data: account } = useSWR('/api/studio/account', readStudioAccount);
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const captchaRef = useRef<{ reset: () => void } | null>(null);
-
-  // Check if credential login is enabled
-  const credentialLoginEnabled = websiteConfig.auth.enableCredentialLogin;
-
-  // turnstile captcha schema
-  const turnstileEnabled = websiteConfig.features.enableTurnstileCaptcha;
-  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const captchaConfigured = turnstileEnabled && !!captchaSiteKey;
-  const captchaSchema = captchaConfigured
-    ? z.string().min(1, 'Please complete the captcha')
-    : z.string().optional();
-
-  const RegisterSchema = z.object({
-    email: z.email({
-      message: t('emailRequired'),
-    }),
-    password: z.string().min(1, {
-      message: t('passwordRequired'),
-    }),
-    name: z.string().min(1, {
-      message: t('nameRequired'),
-    }),
-    captchaToken: captchaSchema,
+  const form = useForm<z.infer<typeof registrationInput>>({
+    resolver: zodResolver(registrationInput),
+    defaultValues: { name: '', email: '', password: '' },
   });
 
-  const form = useForm<z.infer<typeof RegisterSchema>>({
-    resolver: zodResolver(RegisterSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-      name: '',
-      captchaToken: '',
-    },
-  });
-
-  const captchaToken = useWatch({
-    control: form.control,
-    name: 'captchaToken',
-  });
-
-  // Function to reset captcha
-  const resetCaptcha = () => {
-    form.setValue('captchaToken', '');
-    // Try to reset the Turnstile widget if available
-    if (captchaRef.current && typeof captchaRef.current.reset === 'function') {
-      captchaRef.current.reset();
-    }
-  };
-
-  const onSubmit = async (values: z.infer<typeof RegisterSchema>) => {
-    // Validate captcha token if turnstile is enabled and site key is available
-    if (captchaConfigured && values.captchaToken) {
-      setIsPending(true);
-      setError('');
-      setSuccess('');
-
-      const captchaResult = await validateCaptchaAction({
-        captchaToken: values.captchaToken,
+  async function register(values: z.infer<typeof registrationInput>) {
+    setPending(true);
+    setError('');
+    try {
+      const result = await authClient.signUp.email({
+        ...values,
+        callbackURL: destination,
       });
-
-      if (!captchaResult?.data?.success || !captchaResult?.data?.valid) {
-        console.error('register, captcha invalid:', values.captchaToken);
-        const errorMessage = captchaResult?.data?.error || t('captchaInvalid');
-        setError(errorMessage);
-        setIsPending(false);
-        resetCaptcha(); // Reset captcha on validation failure
+      if (result.error) {
+        setError(result.error.message || 'Your account could not be created.');
         return;
       }
+      await mutate('/api/studio/account');
+      if (onAuthenticated && destination === '/#studio') {
+        onAuthenticated();
+        router.refresh();
+      } else window.location.assign(destination);
+    } catch {
+      setError('We could not connect. Please try creating your account again.');
+    } finally {
+      setPending(false);
     }
-
-    // 1. if requireEmailVerification is true, callbackURL will be used in the verification email,
-    // the user will be redirected to the callbackURL after the email is verified.
-    // 2. if requireEmailVerification is false, the user will not be redirected to the callbackURL,
-    // we should redirect to the callbackURL manually in the onSuccess callback.
-    await authClient.signUp.email(
-      {
-        email: values.email,
-        password: values.password,
-        name: values.name,
-        callbackURL: callbackUrl,
-      },
-      {
-        onRequest: (ctx) => {
-          // console.log('register, request:', ctx.url);
-          setIsPending(true);
-          setError('');
-          setSuccess('');
-        },
-        onResponse: (ctx) => {
-          // console.log('register, response:', ctx.response);
-          setIsPending(false);
-        },
-        onSuccess: (ctx) => {
-          // sign up success, user information stored in ctx.data
-          // console.log("register, success:", ctx.data);
-          setSuccess(t('checkEmail'));
-
-          // add affonso affiliate when provider is affonso
-          // https://affonso.io/app/affiliate-program/connect
-          if (
-            websiteConfig.affiliates?.enable &&
-            websiteConfig.affiliates.provider === 'affonso'
-          ) {
-            window.Affonso.signup(values.email);
-          }
-        },
-        onError: (ctx) => {
-          // sign up fail, display the error message
-          // console.error('register, error:', ctx.error);
-          setError(`${ctx.error.status}: ${ctx.error.message}`);
-          // Reset captcha on registration error
-          if (captchaConfigured) {
-            resetCaptcha();
-          }
-        },
-      }
-    );
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
+  }
 
   return (
     <AuthCard
-      headerLabel={t('createAccount')}
-      bottomButtonLabel={t('signInHint')}
-      bottomButtonHref={`${Routes.Login}`}
+      headerLabel="Create your account."
+      bottomButtonLabel="Already have an account? Sign in"
+      bottomButtonHref="/auth/login"
+      embedded={embedded}
+      onSwitch={onLogin}
     >
-      {credentialLoginEnabled && (
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('name')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={isPending}
-                        placeholder="name"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('email')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={isPending}
-                        placeholder="name@example.com"
-                        type="email"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('password')}</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          {...field}
-                          disabled={isPending}
-                          placeholder="******"
-                          type={showPassword ? 'text' : 'password'}
-                          className="pr-10"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                          onClick={togglePasswordVisibility}
-                          disabled={isPending}
-                        >
-                          {showPassword ? (
-                            <EyeOffIcon className="size-4 text-muted-foreground" />
-                          ) : (
-                            <EyeIcon className="size-4 text-muted-foreground" />
-                          )}
-                          <span className="sr-only">
-                            {showPassword
-                              ? t('hidePassword')
-                              : t('showPassword')}
-                          </span>
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormError message={error} />
-            <FormSuccess message={success} />
-            {captchaConfigured && (
-              <Captcha
-                ref={captchaRef}
-                onSuccess={(token) => form.setValue('captchaToken', token)}
-                validationError={form.formState.errors.captchaToken?.message}
-              />
-            )}
-            <Button
-              disabled={isPending || (captchaConfigured && !captchaToken)}
-              size="lg"
-              type="submit"
-              className="w-full flex items-center justify-center gap-2"
-            >
-              {isPending && (
-                <Loader2Icon className="mr-2 size-4 animate-spin" />
-              )}
-              <span>{t('signUp')}</span>
-            </Button>
-          </form>
-        </Form>
+      {!embedded && (
+        <p className="bb-auth-lead">
+          Keep your videos and purchased credits in one place.
+        </p>
       )}
-      <div className="mt-4">
-        <SocialLoginButton
-          callbackUrl={callbackUrl}
-          showDivider={credentialLoginEnabled}
-        />
+      <SocialLoginButton callbackUrl={destination} showDivider={false} />
+      <div className="bb-auth-divider">
+        <span>or use email</span>
       </div>
+      <form onSubmit={form.handleSubmit(register)} className="bb-auth-fields">
+        <label htmlFor={`${formId}-name`}>
+          Name
+          <Input
+            id={`${formId}-name`}
+            {...form.register('name')}
+            autoComplete="name"
+            placeholder="Your name"
+            disabled={pending}
+          />
+        </label>
+        {form.formState.errors.name && (
+          <p className="bb-form-error" role="alert">
+            {form.formState.errors.name.message}
+          </p>
+        )}
+        <label htmlFor={`${formId}-email`}>
+          Email
+          <Input
+            id={`${formId}-email`}
+            {...form.register('email')}
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            disabled={pending}
+          />
+        </label>
+        {form.formState.errors.email && (
+          <p className="bb-form-error" role="alert">
+            {form.formState.errors.email.message}
+          </p>
+        )}
+        <label htmlFor={`${formId}-password`}>
+          Password
+          <span className="bb-password-field">
+            <Input
+              id={`${formId}-password`}
+              {...form.register('password')}
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              disabled={pending}
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </span>
+        </label>
+        {form.formState.errors.password && (
+          <p className="bb-form-error" role="alert">
+            {form.formState.errors.password.message}
+          </p>
+        )}
+        {error && (
+          <p className="bb-form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          className="bb-button"
+          disabled={pending || !account?.auth.email}
+        >
+          {pending && <LoaderCircle size={18} className="bb-spin" />}
+          {pending ? 'Creating account…' : 'Create account'}
+        </button>
+        {account && !account.auth.email && (
+          <p className="bb-dialog-note">
+            Email registration is currently unavailable.
+          </p>
+        )}
+      </form>
     </AuthCard>
   );
-};
+}

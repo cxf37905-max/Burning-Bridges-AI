@@ -1,289 +1,160 @@
 'use client';
-
-import { validateCaptchaAction } from '@/actions/validate-captcha';
-import { AuthCard } from '@/components/auth/auth-card';
-import { FormError } from '@/components/shared/form-error';
-import { FormSuccess } from '@/components/shared/form-success';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { websiteConfig } from '@/config/website';
-import { LocaleLink } from '@/i18n/navigation';
-import { authClient } from '@/lib/auth-client';
-import { getPathWithLocale } from '@/lib/urls';
-import { cn } from '@/lib/utils';
-import { DEFAULT_LOGIN_REDIRECT, Routes } from '@/routes';
+import { useId, useState } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { EyeIcon, EyeOffIcon, Loader2Icon } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
-import { useSearchParams } from 'next/navigation';
-import { useRef, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
-import * as z from 'zod';
-import { Captcha } from '../shared/captcha';
+import { z } from 'zod';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import { authClient } from '@/lib/auth-client';
+import { authRedirect } from '@/lib/auth-redirect';
+import { readStudioAccount } from '@/studio/account-query';
+import { Input } from '@/components/ui/input';
+import { AuthCard } from './auth-card';
 import { SocialLoginButton } from './social-login-button';
+
+const loginInput = z.object({
+  email: z.email('Enter a valid email address.'),
+  password: z.string().min(1, 'Enter your password.'),
+});
 
 export interface LoginFormProps {
   className?: string;
   callbackUrl?: string;
+  embedded?: boolean;
+  onRegister?: () => void;
+  onAuthenticated?: () => void;
 }
 
-export const LoginForm = ({
+export function LoginForm({
   className,
-  callbackUrl: propCallbackUrl,
-}: LoginFormProps) => {
-  const t = useTranslations('AuthPage.login');
-  const tError = useTranslations('AuthPage.error');
+  callbackUrl,
+  embedded,
+  onRegister,
+  onAuthenticated,
+}: LoginFormProps) {
+  const router = useRouter();
+  const formId = useId();
   const searchParams = useSearchParams();
-  const urlError = searchParams.get('error');
-  const paramCallbackUrl = searchParams.get('callbackUrl');
-  // Map error codes to friendly messages
-  const urlErrorMessage = urlError
-    ? tError.has(`codes.${urlError}` as Parameters<typeof tError.has>[0])
-      ? tError(`codes.${urlError}` as Parameters<typeof tError>[0])
-      : urlError
-    : undefined;
-  // Use prop callback URL or param callback URL if provided, otherwise use the default login redirect
-  const locale = useLocale();
-  const defaultCallbackUrl = getPathWithLocale(DEFAULT_LOGIN_REDIRECT, locale);
-  // console.log('login form, propCallbackUrl', propCallbackUrl);
-  // console.log('login form, paramCallbackUrl', paramCallbackUrl);
-  // console.log('login form, defaultCallbackUrl', defaultCallbackUrl);
-  const callbackUrl = propCallbackUrl || paramCallbackUrl || defaultCallbackUrl;
-
-  const [error, setError] = useState<string | undefined>('');
-  const [success, setSuccess] = useState<string | undefined>('');
-  const [isPending, setIsPending] = useState(false);
+  const destination = authRedirect(
+    callbackUrl || searchParams.get('callbackUrl')
+  );
+  const { data: account } = useSWR('/api/studio/account', readStudioAccount);
+  const { mutate } = useSWRConfig();
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const captchaRef = useRef<{ reset: () => void } | null>(null);
-
-  // Check if credential login is enabled
-  const credentialLoginEnabled = websiteConfig.auth.enableCredentialLogin;
-
-  // turnstile captcha schema
-  const turnstileEnabled = websiteConfig.features.enableTurnstileCaptcha;
-  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const captchaConfigured = turnstileEnabled && !!captchaSiteKey;
-  const captchaSchema = captchaConfigured
-    ? z.string().min(1, 'Please complete the captcha')
-    : z.string().optional();
-
-  const LoginSchema = z.object({
-    email: z.email({
-      message: t('emailRequired'),
-    }),
-    password: z.string().min(1, {
-      message: t('passwordRequired'),
-    }),
-    captchaToken: captchaSchema,
+  const form = useForm<z.infer<typeof loginInput>>({
+    resolver: zodResolver(loginInput),
+    defaultValues: { email: '', password: '' },
   });
 
-  const form = useForm<z.infer<typeof LoginSchema>>({
-    resolver: zodResolver(LoginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-      captchaToken: '',
-    },
-  });
-
-  const captchaToken = useWatch({
-    control: form.control,
-    name: 'captchaToken',
-  });
-
-  // Function to reset captcha
-  const resetCaptcha = () => {
-    form.setValue('captchaToken', '');
-    // Try to reset the Turnstile widget if available
-    if (captchaRef.current && typeof captchaRef.current.reset === 'function') {
-      captchaRef.current.reset();
-    }
-  };
-
-  const onSubmit = async (values: z.infer<typeof LoginSchema>) => {
-    // Validate captcha token if turnstile is enabled and site key is available
-    if (captchaConfigured && values.captchaToken) {
-      setIsPending(true);
-      setError('');
-      setSuccess('');
-
-      const captchaResult = await validateCaptchaAction({
-        captchaToken: values.captchaToken,
+  async function signIn(values: z.infer<typeof loginInput>) {
+    setPending(true);
+    setError('');
+    try {
+      const result = await authClient.signIn.email({
+        ...values,
+        callbackURL: destination,
       });
-
-      if (!captchaResult?.data?.success || !captchaResult?.data?.valid) {
-        console.error('login, captcha invalid:', values.captchaToken);
-        const errorMessage = captchaResult?.data?.error || t('captchaInvalid');
-        setError(errorMessage);
-        setIsPending(false);
-        resetCaptcha(); // Reset captcha on validation failure
+      if (result.error) {
+        setError(result.error.message || 'Sign-in failed. Please try again.');
         return;
       }
+      await mutate('/api/studio/account');
+      if (onAuthenticated && destination === '/#studio') {
+        onAuthenticated();
+        router.refresh();
+      } else window.location.assign(destination);
+    } catch {
+      setError('We could not connect. Please try signing in again.');
+    } finally {
+      setPending(false);
     }
-
-    // 1. if callbackUrl is provided, user will be redirected to the callbackURL after login successfully.
-    // if user email is not verified, a new verification email will be sent to the user with the callbackURL.
-    // 2. if callbackUrl is not provided, we should redirect manually in the onSuccess callback.
-    await authClient.signIn.email(
-      {
-        email: values.email,
-        password: values.password,
-        callbackURL: callbackUrl,
-      },
-      {
-        onRequest: (ctx) => {
-          // console.log("login, request:", ctx.url);
-          setIsPending(true);
-          setError('');
-          setSuccess('');
-        },
-        onResponse: (ctx) => {
-          // console.log("login, response:", ctx.response);
-          setIsPending(false);
-        },
-        onSuccess: (ctx) => {
-          // console.log("login, success:", ctx.data);
-          // setSuccess("Login successful");
-          // router.push(callbackUrl || "/dashboard");
-        },
-        onError: (ctx) => {
-          // console.error('login, error:', ctx.error);
-          setError(`${ctx.error.status}: ${ctx.error.message}`);
-          // Reset captcha on login error
-          if (captchaConfigured) {
-            resetCaptcha();
-          }
-        },
-      }
-    );
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
+  }
 
   return (
     <AuthCard
-      headerLabel={t('welcomeBack')}
-      bottomButtonLabel={t('signUpHint')}
-      bottomButtonHref={`${Routes.Register}`}
-      className={cn('', className)}
+      headerLabel="Welcome back."
+      bottomButtonLabel="New here? Create an account"
+      bottomButtonHref="/auth/register"
+      className={className}
+      embedded={embedded}
+      onSwitch={onRegister}
     >
-      {credentialLoginEnabled && (
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('email')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={isPending}
-                        placeholder="name@example.com"
-                        type="email"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex justify-between items-center">
-                      <FormLabel>{t('password')}</FormLabel>
-                      <Button
-                        size="sm"
-                        variant="link"
-                        asChild
-                        className="px-0 font-normal text-muted-foreground"
-                      >
-                        <LocaleLink
-                          href={`${Routes.ForgotPassword}`}
-                          className="text-xs hover:underline hover:underline-offset-4 hover:text-primary"
-                        >
-                          {t('forgotPassword')}
-                        </LocaleLink>
-                      </Button>
-                    </div>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          {...field}
-                          disabled={isPending}
-                          placeholder="******"
-                          type={showPassword ? 'text' : 'password'}
-                          className="pr-10"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                          onClick={togglePasswordVisibility}
-                          disabled={isPending}
-                        >
-                          {showPassword ? (
-                            <EyeOffIcon className="size-4 text-muted-foreground" />
-                          ) : (
-                            <EyeIcon className="size-4 text-muted-foreground" />
-                          )}
-                          <span className="sr-only">
-                            {showPassword
-                              ? t('hidePassword')
-                              : t('showPassword')}
-                          </span>
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormError message={error || urlErrorMessage || undefined} />
-            <FormSuccess message={success} />
-            {captchaConfigured && (
-              <Captcha
-                ref={captchaRef}
-                onSuccess={(token) => form.setValue('captchaToken', token)}
-                validationError={form.formState.errors.captchaToken?.message}
-              />
-            )}
-            <Button
-              disabled={isPending || (captchaConfigured && !captchaToken)}
-              size="lg"
-              type="submit"
-              className="w-full flex items-center justify-center gap-2"
-            >
-              {isPending && (
-                <Loader2Icon className="mr-2 size-4 animate-spin" />
-              )}
-              <span>{t('signIn')}</span>
-            </Button>
-          </form>
-        </Form>
+      {!embedded && (
+        <p className="bb-auth-lead">
+          Sign in to your credits and Burning Bridges AI videos.
+        </p>
       )}
-      <div className="mt-4">
-        <SocialLoginButton
-          callbackUrl={callbackUrl}
-          showDivider={credentialLoginEnabled}
-        />
+      <SocialLoginButton callbackUrl={destination} showDivider={false} />
+      <div className="bb-auth-divider">
+        <span>or use email</span>
       </div>
+      <form onSubmit={form.handleSubmit(signIn)} className="bb-auth-fields">
+        <label htmlFor={`${formId}-email`}>
+          Email
+          <Input
+            id={`${formId}-email`}
+            {...form.register('email')}
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            disabled={pending}
+            aria-invalid={!!form.formState.errors.email}
+          />
+        </label>
+        {form.formState.errors.email && (
+          <p className="bb-form-error" role="alert">
+            {form.formState.errors.email.message}
+          </p>
+        )}
+        <label htmlFor={`${formId}-password`}>
+          Password
+          <span className="bb-password-field">
+            <Input
+              id={`${formId}-password`}
+              {...form.register('password')}
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              disabled={pending}
+              aria-invalid={!!form.formState.errors.password}
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </span>
+        </label>
+        {form.formState.errors.password && (
+          <p className="bb-form-error" role="alert">
+            {form.formState.errors.password.message}
+          </p>
+        )}
+        <a href="/auth/forgot-password" className="bb-auth-forgot">
+          Forgot password?
+        </a>
+        {error && (
+          <p className="bb-form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          className="bb-button"
+          disabled={pending || !account?.auth.email}
+        >
+          {pending && <LoaderCircle size={18} className="bb-spin" />}
+          {pending ? 'Signing in…' : 'Sign in with email'}
+        </button>
+        <p className="bb-dialog-note">
+          Your account keeps your credits and your recent videos. Your photo
+          stays in the studio while you sign in.
+        </p>
+      </form>
     </AuthCard>
   );
-};
+}

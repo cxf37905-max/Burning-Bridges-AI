@@ -1,74 +1,18 @@
-import CallToActionSection from '@/components/blocks/calltoaction/calltoaction';
-import FaqSection from '@/components/blocks/faqs/faqs';
-import FeaturesSection from '@/components/blocks/features/features';
-import Features2Section from '@/components/blocks/features/features2';
-import HeroSection from '@/components/blocks/hero/hero';
-import IntegrationSection from '@/components/blocks/integration/integration';
-import Integration2Section from '@/components/blocks/integration/integration2';
-import LogoCloud from '@/components/blocks/logo-cloud/logo-cloud';
-import PricingSection from '@/components/blocks/pricing/pricing';
-import StatsSection from '@/components/blocks/stats/stats';
-import TestimonialsSection from '@/components/blocks/testimonials/testimonials';
-import CrispChat from '@/components/chatbox/crisp-chat';
-import { NewsletterCard } from '@/components/newsletter/newsletter-card';
-import { constructMetadata } from '@/lib/metadata';
-import type { Metadata } from 'next';
-import type { Locale } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
+import { StudioLanding } from '@/components/studio/studio-landing';
+import { getStudioAvailability } from '@/studio/availability';
+import { studioBrand, studioFaqs } from '@/studio/catalog';
+import { studioMetadata } from '@/studio/metadata';
 
-/**
- * https://next-intl.dev/docs/environments/actions-metadata-route-handlers#metadata-api
- */
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: Locale }>;
-}): Promise<Metadata | undefined> {
-  const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'Metadata' });
+export const metadata = studioMetadata();
 
-  return constructMetadata({
-    title: t('title'),
-    description: t('description'),
-    locale,
-    pathname: '',
-  });
-}
-
-interface HomePageProps {
-  params: Promise<{ locale: Locale }>;
-}
-
-export default async function HomePage(_props: HomePageProps) {
-  return (
-    <>
-      <div className="flex flex-col">
-        <HeroSection />
-
-        <LogoCloud />
-
-        <FeaturesSection />
-
-        <Features2Section />
-
-        <CallToActionSection />
-
-        <StatsSection />
-
-        <IntegrationSection />
-
-        <Integration2Section />
-
-        <PricingSection />
-
-        <FaqSection />
-
-        <TestimonialsSection />
-
-        <NewsletterCard />
-
-        <CrispChat />
-      </div>
-    </>
-  );
+export default function HomePage() {
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'WebSite', '@id': `${studioBrand.url}/#website`, url: studioBrand.url, name: studioBrand.name, inLanguage: 'en' },
+      { '@type': 'WebApplication', '@id': `${studioBrand.url}/#app`, name: studioBrand.name, url: studioBrand.url, applicationCategory: 'MultimediaApplication', operatingSystem: 'Web', description: studioBrand.description },
+      { '@type': 'FAQPage', mainEntity: studioFaqs.map((faq) => ({ '@type': 'Question', name: faq.question, acceptedAnswer: { '@type': 'Answer', text: faq.answer } })) },
+    ],
+  };
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }} /><StudioLanding availability={getStudioAvailability()} /></>;
 }

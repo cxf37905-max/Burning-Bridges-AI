@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
 
   /* config options here */
   devIndicators: false,
+  serverExternalPackages: ['ffmpeg-static'],
+  outputFileTracingIncludes: {
+    '/api/studio/**': [
+      './node_modules/ffmpeg-static/ffmpeg*',
+      './public/studio/reference/*-ref-audio.m4a',
+    ],
+  },
 
   // https://nextjs.org/docs/architecture/nextjs-compiler#remove-console
   // Remove all console.* calls in production only

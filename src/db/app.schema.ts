@@ -46,7 +46,7 @@ export const userCredit = pgTable("user_credit", {
 	createdAt: timestamp("created_at").notNull().defaultNow(),
 	updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
-	userCreditUserIdIdx: index("user_credit_user_id_idx").on(table.userId),
+	userCreditUserIdIdx: uniqueIndex("user_credit_user_id_unique").on(table.userId),
 }));
 
 export const creditTransaction = pgTable("credit_transaction", {

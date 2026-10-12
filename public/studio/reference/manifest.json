@@ -1,0 +1,76 @@
+{
+  "downloadedAt": "2026-10-12T01:33:17.035Z",
+  "authorization": "用户已确认原视频和音频的使用授权。",
+  "assets": [
+    {
+      "filename": "burning-bridges-ai-video.mp4",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ai-video.mp4",
+      "bytes": 1910693,
+      "sha256": "c9eb67a425b284a73d321394c5ea4543b9f07c7cd696d47457f35782523a6367",
+      "contentType": "video/mp4"
+    },
+    {
+      "filename": "burning-bridges-ai-video.jpg",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ai-video.jpg",
+      "bytes": 61712,
+      "sha256": "1965450c1a9d265e3b06abdb71306f3b68921eb0e100f316ca8cd99d2479cb7e",
+      "contentType": "image/jpeg"
+    },
+    {
+      "filename": "burning-bridges-ref-1.mp4",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ref-1.mp4",
+      "bytes": 5766888,
+      "sha256": "49095314f4f2e5a43a636324798978c6b88885b9e5945eb30493091ba3df1fc9",
+      "contentType": "video/mp4"
+    },
+    {
+      "filename": "burning-bridges-ref-2.mp4",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ref-2.mp4",
+      "bytes": 3279370,
+      "sha256": "dda7942cb3445c56c03084627591e8cc3d5cc92d016984b0bf73647af6f47767",
+      "contentType": "video/mp4"
+    },
+    {
+      "filename": "burning-bridges-ref-audio.m4a",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ref-audio.m4a",
+      "bytes": 488204,
+      "sha256": "9dff5a90c683e744cc691ced71d6ab6b5ee3acb46d0dd4e3fdfd0af44a7f876e",
+      "contentType": "audio/mp4"
+    },
+    {
+      "filename": "burning-bridges-after-party.mp4",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party.mp4",
+      "bytes": 4669177,
+      "sha256": "413e8ff28fe52c6579ad3852f87815b30601cb49a5d8b160fec19b9b43bd7dc8",
+      "contentType": "video/mp4"
+    },
+    {
+      "filename": "burning-bridges-after-party.jpg",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party.jpg",
+      "bytes": 35095,
+      "sha256": "79d864835da58802272973938374673020644c5277794e20df10b9b5e6c70887",
+      "contentType": "image/jpeg"
+    },
+    {
+      "filename": "burning-bridges-after-party-ref-1.mp4",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party-ref-1.mp4",
+      "bytes": 3664233,
+      "sha256": "626e9d5b4eaa10597242fd88d8660d2221224418dc2c56604fd25696729e2eaf",
+      "contentType": "video/mp4"
+    },
+    {
+      "filename": "burning-bridges-after-party-ref-2.mp4",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party-ref-2.mp4",
+      "bytes": 1867163,
+      "sha256": "851a6535e7e91cbf36793e7c3ed51e0bf5df923d02a4001c4cd4c1f30da9b87a",
+      "contentType": "video/mp4"
+    },
+    {
+      "filename": "burning-bridges-after-party-ref-audio.m4a",
+      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party-ref-audio.m4a",
+      "bytes": 501989,
+      "sha256": "69755b99e38e7258deb486eb83a7cffb6b2280469dcc85fc87d77163f78a0031",
+      "contentType": "audio/mp4"
+    }
+  ]
+}

@@ -18,28 +18,26 @@ import { cn } from '@/lib/utils';
 import { uploadFileFromBrowser } from '@/storage/client';
 import { User2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 interface UpdateAvatarCardProps {
   className?: string;
+  initialImage?: string | null;
 }
 
 /**
  * Update the user's avatar
  */
-export function UpdateAvatarCard({ className }: UpdateAvatarCardProps) {
+export function UpdateAvatarCard({
+  className,
+  initialImage,
+}: UpdateAvatarCardProps) {
   const t = useTranslations('Dashboard.settings.profile');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | undefined>('');
   const { data: session, refetch } = authClient.useSession();
-  const [avatarUrl, setAvatarUrl] = useState('');
-
-  useEffect(() => {
-    if (session?.user?.image) {
-      setAvatarUrl(session.user.image);
-    }
-  }, [session]);
+  const [avatarUrl, setAvatarUrl] = useState(initialImage || '');
 
   // show nothing if storage is disabled or update avatar is disabled
   if (

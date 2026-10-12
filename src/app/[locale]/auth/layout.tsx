@@ -1,18 +1,19 @@
-import BackButtonSmall from '@/components/shared/back-button-small';
+import type { ReactNode } from 'react';
+import { Suspense } from 'react';
+import { StudioHeader } from '@/components/studio/studio-header';
+import { StudioFooter } from '@/components/studio/studio-footer';
+import '@/styles/studio.css';
 
-/**
- * auth layout is different from other public layouts,
- * so auth directory is not put in (public) directory.
- */
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export const metadata = { robots: { index: false, follow: true } };
+
+export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-      <BackButtonSmall className="absolute top-6 left-6" />
-      <div className="flex w-full max-w-sm flex-col gap-6">{children}</div>
+    <div className="bb-site">
+      <StudioHeader />
+      <main id="main-content" className="bb-auth-page">
+        <Suspense fallback={<p>Loading your account…</p>}>{children}</Suspense>
+      </main>
+      <StudioFooter />
     </div>
   );
 }

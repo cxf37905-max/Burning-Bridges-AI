@@ -11,7 +11,6 @@ export const ErrorCard = () => {
       headerLabel={t('title')}
       bottomButtonHref={`${Routes.Login}`}
       bottomButtonLabel={t('backToLogin')}
-      className="border-none"
     >
       <div className="w-full flex justify-center items-center py-4 gap-2">
         <TriangleAlertIcon className="text-destructive size-4" />

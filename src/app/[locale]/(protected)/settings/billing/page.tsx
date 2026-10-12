@@ -1,39 +1,24 @@
-import BillingCard from '@/components/settings/billing/billing-card';
-
-type BillingPageSearchParams = Promise<{
-  payment?: string | string[];
-  syncId?: string | string[];
-}>;
-
-const getBillingPaymentSyncParams = async (
-  searchParams: BillingPageSearchParams
-): Promise<string | null> => {
-  const params = await searchParams;
-  const payment = params.payment;
-  const syncId = params.syncId;
-
-  if (payment !== 'syncing' || typeof syncId !== 'string') {
-    return null;
-  }
-
-  return syncId;
-};
-
-/**
- * Billing page, show billing information
- */
-export default async function BillingPage({
-  searchParams,
-}: {
-  searchParams: BillingPageSearchParams;
-}) {
-  const paymentSyncId = await getBillingPaymentSyncParams(searchParams);
-
+import { readStudioAccountRecords } from '@/studio/account-records';
+import { AccountPageHeading } from '@/components/studio/account-page-heading';
+import { AccountBillingHistory } from '@/components/studio/account-billing-history';
+export default async function BillingPage() {
+  const { orders } = await readStudioAccountRecords();
   return (
-    <div className="flex flex-col gap-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <BillingCard paymentSyncId={paymentSyncId} />
-      </div>
-    </div>
+    <>
+      <AccountPageHeading
+        title="Billing & purchases."
+        description="Your one-time Waffo payments, amounts and confirmation status."
+      />
+      <p className="bb-account-note">
+        No subscription. No automatic renewal. Credits are added after payment
+        is verified.
+      </p>
+      <AccountBillingHistory orders={orders} />
+      <p className="bb-account-note">
+        Need help with a payment?{' '}
+        <a href="mailto:support@burningbridgesai.cc">Contact support</a> with
+        your order reference.
+      </p>
+    </>
   );
 }

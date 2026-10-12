@@ -65,7 +65,7 @@ const paymentProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER ||
   'stripe') as PaymentConfig['provider'];
 const priceIds = paymentPriceIds[paymentProvider];
 // 客服邮箱只改这一处，法律页面、联系入口和邮件收件人共用。
-const legalSupportEmail = 'support@example.com';
+const legalSupportEmail = 'support@burningbridgesai.cc';
 
 // 所有站点共用的生成内容使用规则，避免营销页和条款出现不同口径。
 export const commercialUseTerms =
@@ -107,11 +107,11 @@ export const websiteConfig: WebsiteConfig = {
     },
   },
   features: {
-    enableUpgradeCard: true,
+    enableUpgradeCard: false,
     enableUpdateAvatar: true,
     enableDatafastRevenueTrack: false,
     enableCrispChat: false,
-    enableTurnstileCaptcha: true,
+    enableTurnstileCaptcha: false,
   },
   affiliates: {
     enable: false,
@@ -126,7 +126,7 @@ export const websiteConfig: WebsiteConfig = {
   },
   auth: {
     enableGoogleLogin: true,
-    enableGithubLogin: true,
+    enableGithubLogin: false,
     enableCredentialLogin: true,
     enableDeleteUser: false,
   },
@@ -158,7 +158,7 @@ export const websiteConfig: WebsiteConfig = {
   newsletter: {
     enable: true,
     provider: 'resend',
-    autoSubscribeAfterSignUp: true,
+    autoSubscribeAfterSignUp: false,
   },
   notification: {
     enable: true,
@@ -179,8 +179,8 @@ export const websiteConfig: WebsiteConfig = {
         isFree: true,
         isLifetime: false,
         credits: {
-          enable: true,
-          amount: 50,
+          enable: false,
+          amount: 0,
           expireDays: 30,
         },
       },
@@ -206,8 +206,8 @@ export const websiteConfig: WebsiteConfig = {
         isLifetime: false,
         popular: true,
         credits: {
-          enable: true,
-          amount: 1000,
+          enable: false,
+          amount: 0,
           expireDays: 30,
         },
       },
@@ -225,8 +225,8 @@ export const websiteConfig: WebsiteConfig = {
         isFree: false,
         isLifetime: true,
         credits: {
-          enable: true,
-          amount: 1000,
+          enable: false,
+          amount: 0,
           expireDays: 30,
         },
       },
@@ -236,8 +236,8 @@ export const websiteConfig: WebsiteConfig = {
     enableCredits: true,
     enablePackagesForFreePlan: false,
     registerGiftCredits: {
-      enable: true,
-      amount: 50,
+      enable: false,
+      amount: 0,
       expireDays: 30,
     },
     packages: {

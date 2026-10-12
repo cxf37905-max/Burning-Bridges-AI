@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.local/
 /out/
 
 # production
@@ -79,3 +80,7 @@ next-env.d.ts
 .worktrees/
 .security-key
 logs/security/
+
+# 本地验证产物
+/.cache/
+/docs/research/

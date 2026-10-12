@@ -1,44 +1,39 @@
-import { DashboardSidebar } from '@/components/dashboard/dashboard-sidebar';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { getSession } from '@/lib/server';
-import { Routes } from '@/routes';
+import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
-import type { PropsWithChildren } from 'react';
+import { getStudioUser } from '@/studio/auth';
+import { StudioHeader } from '@/components/studio/studio-header';
+import { StudioFooter } from '@/components/studio/studio-footer';
+import { AccountNavigation } from '@/components/studio/account-navigation';
+import '@/styles/studio.css';
 
-/**
- * Protected layout for authenticated users
- *
- * SECURITY: This layout validates the session on the server for all protected pages.
- * The middleware only performs a fast cookie check for redirection; this is the
- * canonical server-side validation point that ensures the session is valid.
- *
- * inspired by dashboard-01
- * https://ui.shadcn.com/blocks
- */
-export default async function DashboardLayout({ children }: PropsWithChildren) {
-  // Server-side session validation - ensures the session is valid
-  // This is critical because middleware only checks for cookie existence
-  const session = await getSession();
-  if (!session?.user) {
-    redirect(Routes.Login);
-  }
+export const metadata = { robots: { index: false, follow: true } };
 
-  if (!session.user.emailVerified) {
-    redirect(`${Routes.Login}?error=email_not_verified`);
-  }
-
+export default async function AccountLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const user = await getStudioUser();
+  if (!user) redirect('/auth/login?callbackUrl=/dashboard');
   return (
-    <SidebarProvider
-      style={
-        {
-          '--sidebar-width': 'calc(var(--spacing) * 72)',
-          '--header-height': 'calc(var(--spacing) * 12)',
-        } as React.CSSProperties
-      }
-    >
-      <DashboardSidebar user={session.user} variant="inset" />
-
-      <SidebarInset>{children}</SidebarInset>
-    </SidebarProvider>
+    <div className="bb-site">
+      <StudioHeader />
+      <main id="main-content" className="bb-shell bb-account-shell">
+        <header className="bb-account-welcome">
+          <span className="bb-section-kicker">
+            YOUR BURNING BRIDGES AI STUDIO
+          </span>
+          <p>
+            {user.name || 'Your account'}
+            <span>{user.email}</span>
+          </p>
+        </header>
+        <div className="bb-account-layout">
+          <AccountNavigation />
+          <div className="bb-account-content">{children}</div>
+        </div>
+      </main>
+      <StudioFooter />
+    </div>
   );
 }

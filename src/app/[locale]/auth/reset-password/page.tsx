@@ -1,29 +1,19 @@
 import { ResetPasswordForm } from '@/components/auth/reset-password-form';
-import { constructMetadata } from '@/lib/metadata';
-import type { Metadata } from 'next';
-import type { Locale } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: Locale }>;
-}): Promise<Metadata | undefined> {
-  const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'Metadata' });
-  const pt = await getTranslations({
-    locale,
-    namespace: 'AuthPage.resetPassword',
-  });
-
-  return constructMetadata({
-    title: pt('title') + ' | ' + t('title'),
-    description: t('description'),
-    locale,
-    pathname: '/auth/reset-password',
-  });
-}
-
-export default async function ResetPasswordPage() {
-  return <ResetPasswordForm />;
+import { studioMetadata } from '@/studio/metadata';
+import { Suspense } from 'react';
+export const metadata = {
+  ...studioMetadata({
+    title: 'Choose a new password | Burning Bridges AI',
+    description: 'Secure your Burning Bridges AI account with a new password.',
+    path: '/auth/reset-password',
+    noIndex: true,
+  }),
+  robots: { index: false, follow: true },
+};
+export default function Page() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
 }

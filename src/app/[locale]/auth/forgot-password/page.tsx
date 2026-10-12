@@ -1,29 +1,19 @@
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form';
-import { constructMetadata } from '@/lib/metadata';
-import type { Metadata } from 'next';
-import type { Locale } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: Locale }>;
-}): Promise<Metadata | undefined> {
-  const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'Metadata' });
-  const pt = await getTranslations({
-    locale,
-    namespace: 'AuthPage.forgotPassword',
-  });
-
-  return constructMetadata({
-    title: pt('title') + ' | ' + t('title'),
-    description: t('description'),
-    locale,
-    pathname: '/auth/forgot-password',
-  });
-}
-
-export default async function ForgotPasswordPage() {
-  return <ForgotPasswordForm />;
+import { studioMetadata } from '@/studio/metadata';
+import { Suspense } from 'react';
+export const metadata = {
+  ...studioMetadata({
+    title: 'Reset your password | Burning Bridges AI',
+    description: 'Reset the password for your Burning Bridges AI account.',
+    path: '/auth/forgot-password',
+    noIndex: true,
+  }),
+  robots: { index: false, follow: true },
+};
+export default function Page() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <ForgotPasswordForm />
+    </Suspense>
+  );
 }

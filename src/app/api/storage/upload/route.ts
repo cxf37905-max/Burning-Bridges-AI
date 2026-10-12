@@ -7,14 +7,13 @@ import { type NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   // Protected API route: validate session
   const session = await requireSession(request);
-  if (!session) {
+  if (!session?.user || session.user.banned) {
     return unauthorizedResponse();
   }
 
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const folder = formData.get('folder') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -46,7 +45,7 @@ export async function POST(request: NextRequest) {
       buffer,
       file.name,
       file.type,
-      folder || undefined
+      `avatars/${session.user.id}`
     );
 
     return NextResponse.json(result);

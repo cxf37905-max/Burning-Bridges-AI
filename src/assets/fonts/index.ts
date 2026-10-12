@@ -3,6 +3,7 @@ import {
   Noto_Sans,
   Noto_Sans_Mono,
   Noto_Serif,
+  Space_Grotesk,
 } from 'next/font/google';
 
 /**
@@ -64,4 +65,11 @@ export const fontBricolageGrotesque = Bricolage_Grotesque({
   display: 'swap',
   variable: '--font-bricolage-grotesque',
   weight: ['400', '500', '600', '700'],
+});
+
+export const fontSpaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-space-grotesk',
+  weight: ['600'],
 });

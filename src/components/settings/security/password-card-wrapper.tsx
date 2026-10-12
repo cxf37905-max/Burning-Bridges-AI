@@ -31,8 +31,11 @@ export function PasswordCardWrapper() {
 
   // Handle error state
   if (error) {
-    console.error('check credential provider error:', error);
-    return null;
+    return (
+      <p className="bb-form-error" role="alert">
+        We could not load your security settings. Please refresh the page.
+      </p>
+    );
   }
 
   // Don't render anything while loading

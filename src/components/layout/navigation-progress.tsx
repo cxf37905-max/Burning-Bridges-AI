@@ -126,7 +126,7 @@ export function NavigationProgress() {
   return (
     <div
       aria-hidden="true"
-      className={`fixed inset-x-0 top-0 z-[100] h-[3px] origin-left bg-primary transition-[opacity,width] ease-out dark:h-1 dark:shadow-[0_0_14px_var(--primary)] ${
+      className={`fixed inset-x-0 top-0 z-[100] h-[3px] origin-left bg-[oklch(0.91_0.2_126)] transition-[opacity,width] ease-out dark:h-1 dark:shadow-[0_0_14px_oklch(0.91_0.2_126)] ${
         state === 'loading'
           ? 'w-2/3 opacity-100 duration-700'
           : state === 'done'

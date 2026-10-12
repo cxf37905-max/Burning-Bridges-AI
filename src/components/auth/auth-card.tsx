@@ -1,14 +1,4 @@
 'use client';
-
-import { BottomLink } from '@/components/auth/bottom-link';
-import { Logo } from '@/components/layout/logo';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
 import { LocaleLink } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 
@@ -18,27 +8,39 @@ interface AuthCardProps {
   bottomButtonLabel: string;
   bottomButtonHref: string;
   className?: string;
+  embedded?: boolean;
+  onSwitch?: () => void;
 }
 
-export const AuthCard = ({
+export function AuthCard({
   children,
   headerLabel,
   bottomButtonLabel,
   bottomButtonHref,
   className,
-}: AuthCardProps) => {
+  embedded = false,
+  onSwitch,
+}: AuthCardProps) {
   return (
-    <Card className={cn('shadow-xs border border-border', className)}>
-      <CardHeader className="flex flex-col items-center">
-        <LocaleLink href="/" prefetch={false}>
-          <Logo className="mb-2" />
-        </LocaleLink>
-        <CardDescription>{headerLabel}</CardDescription>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-      <CardFooter>
-        <BottomLink label={bottomButtonLabel} href={bottomButtonHref} />
-      </CardFooter>
-    </Card>
+    <section
+      className={cn('bb-auth-form', !embedded && 'bb-auth-panel', className)}
+    >
+      {!embedded && (
+        <header className="bb-auth-heading">
+          <span className="bb-section-kicker">BURNING BRIDGES AI</span>
+          <h1>{headerLabel}</h1>
+        </header>
+      )}
+      {children}
+      <footer className="bb-auth-footer">
+        {onSwitch ? (
+          <button type="button" className="bb-text-link" onClick={onSwitch}>
+            {bottomButtonLabel}
+          </button>
+        ) : (
+          <LocaleLink href={bottomButtonHref}>{bottomButtonLabel}</LocaleLink>
+        )}
+      </footer>
+    </section>
   );
-};
+}

@@ -1,26 +1,11 @@
 import { ErrorCard } from '@/components/auth/error-card';
-import { constructMetadata } from '@/lib/metadata';
-import type { Metadata } from 'next';
-import type { Locale } from 'next-intl';
-import { getTranslations } from 'next-intl/server';
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: Locale }>;
-}): Promise<Metadata | undefined> {
-  const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'Metadata' });
-  const pt = await getTranslations({ locale, namespace: 'AuthPage.error' });
-
-  return constructMetadata({
-    title: pt('title') + ' | ' + t('title'),
-    description: t('description'),
-    locale,
-    pathname: '/auth/error',
-  });
-}
-
-export default async function AuthErrorPage() {
+import { studioMetadata } from '@/studio/metadata';
+export const metadata = studioMetadata({
+  title: 'Sign-in error | Burning Bridges AI',
+  description: 'Return to your Burning Bridges AI account.',
+  path: '/auth/error',
+  noIndex: true,
+});
+export default function AuthErrorPage() {
   return <ErrorCard />;
 }

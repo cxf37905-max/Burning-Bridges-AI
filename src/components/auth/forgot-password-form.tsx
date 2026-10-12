@@ -20,7 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2Icon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -40,17 +40,9 @@ export const ForgotPasswordForm = ({ className }: { className?: string }) => {
   const form = useForm<z.infer<typeof ForgotPasswordSchema>>({
     resolver: zodResolver(ForgotPasswordSchema),
     defaultValues: {
-      email: '',
+      email: searchParams.get('email') || '',
     },
   });
-
-  // Pre-fill the email field if it's provided in the URL
-  useEffect(() => {
-    const emailFromUrl = searchParams.get('email');
-    if (emailFromUrl) {
-      form.setValue('email', emailFromUrl);
-    }
-  }, [searchParams, form]);
 
   const onSubmit = async (values: z.infer<typeof ForgotPasswordSchema>) => {
     await authClient.requestPasswordReset(

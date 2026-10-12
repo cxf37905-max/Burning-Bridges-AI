@@ -1,5 +1,6 @@
 import * as authSchema from './auth.schema';
 import * as appSchema from './app.schema';
+import * as studioSchema from './studio.schema';
 
 /**
  * Re-export all tables so drizzle-kit can discover them when reading this file.
@@ -7,8 +8,10 @@ import * as appSchema from './app.schema';
  */
 export * from './auth.schema';
 export * from './app.schema';
+export * from './studio.schema';
 
 export const schema = {
   ...authSchema,
   ...appSchema,
+  ...studioSchema,
 } as const;

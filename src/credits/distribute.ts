@@ -1,3 +1,4 @@
+import { automaticCreditGrantsEnabled } from './policy';
 import { randomUUID } from 'crypto';
 import { getDb } from '@/db';
 import { creditTransaction, payment, user, userCredit } from '@/db/schema';
@@ -17,6 +18,8 @@ import { CREDIT_TRANSACTION_TYPE } from './types';
  * This function is designed to be called by a cron job
  */
 export async function distributeCreditsToAllUsers() {
+  if (!automaticCreditGrantsEnabled)
+    return { usersCount: 0, processedCount: 0, errorCount: 0 };
   console.log('>>> distribute credits start');
 
   // Process expired credits first before distributing new credits
@@ -201,6 +204,7 @@ export async function distributeCreditsToAllUsers() {
  * @param userIds - Array of user IDs
  */
 export async function batchAddMonthlyFreeCredits(userIds: string[]) {
+  if (!automaticCreditGrantsEnabled) return;
   if (userIds.length === 0) {
     console.log('batchAddMonthlyFreeCredits, no users to add credits');
     return;
@@ -335,6 +339,7 @@ export async function batchAddMonthlyFreeCredits(userIds: string[]) {
 export async function batchAddLifetimeMonthlyCredits(
   users: Array<{ userId: string; priceId: string }>
 ) {
+  if (!automaticCreditGrantsEnabled) return;
   if (users.length === 0) {
     console.log('batchAddLifetimeMonthlyCredits, no users to add credits');
     return;
@@ -493,6 +498,7 @@ export async function batchAddLifetimeMonthlyCredits(
 export async function batchAddYearlyUsersMonthlyCredits(
   users: Array<{ userId: string; priceId: string }>
 ) {
+  if (!automaticCreditGrantsEnabled) return;
   if (users.length === 0) {
     console.log('batchAddYearlyUsersMonthlyCredits, no users to add credits');
     return;

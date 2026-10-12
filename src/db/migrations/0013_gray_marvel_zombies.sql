@@ -1,0 +1,1 @@
+ALTER TABLE "studio_video" ADD COLUMN "kling_pipeline" jsonb;
