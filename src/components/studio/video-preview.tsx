@@ -77,7 +77,6 @@ export function VideoPreview({
               onError={() => setUnavailable(true)}
             />
           )}
-          <span className="bb-reference-label">{scene.name}</span>
         </div>
       )}
       <div className="bb-effect-caption">
