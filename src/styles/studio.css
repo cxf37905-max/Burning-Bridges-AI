@@ -956,7 +956,6 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-direction: row-reverse;
   margin-bottom: 85px;
   overflow: hidden;
   position: relative;
@@ -972,14 +971,6 @@
   color: var(--bb-muted);
   margin-top: 15px;
   font-size: 12px;
-}
-.bb-cta-art {
-  color: var(--bb-lime);
-  padding-inline: 10px;
-  transform: rotate(-8deg);
-  font-size: 240px;
-  line-height: 0.75;
-  font-weight: 200;
 }
 .bb-footer {
   border-top: 1px solid var(--bb-line);
@@ -1279,9 +1270,6 @@
     padding: 40px;
     margin-bottom: 55px;
   }
-  .bb-cta-art {
-    font-size: 160px;
-  }
   .bb-footer-bottom {
     flex-wrap: wrap;
     font-size: 12px;
@@ -1424,13 +1412,6 @@
   }
   .bb-final-cta .bb-section-kicker {
     font-size: 12px;
-  }
-  .bb-cta-art {
-    position: absolute;
-    right: -15px;
-    bottom: 15px;
-    opacity: 0.16;
-    font-size: 120px;
   }
   .bb-final-cta .bb-button {
     position: relative;

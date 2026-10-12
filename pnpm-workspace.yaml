@@ -1,2 +1,4 @@
 onlyBuiltDependencies:
   - ffmpeg-static
+patchedDependencies:
+  fumadocs-ui@16.2.4: patches/fumadocs-ui@16.2.4.patch

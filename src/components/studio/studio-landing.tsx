@@ -62,9 +62,6 @@ export function StudioLanding({
         </div>
       </section>
       <section className="bb-final-cta bb-shell">
-        <div className="bb-cta-art" aria-hidden="true">
-          ↗
-        </div>
         <div>
           <h2>Make Your Burning Bridges AI Video</h2>
           <p className="bb-final-copy">
