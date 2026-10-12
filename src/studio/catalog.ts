@@ -1,9 +1,8 @@
+import { Metadata as brandMetadata } from '../../messages/en.json';
+
 export const studioBrand = {
-  name: 'Burning Bridges AI',
+  ...brandMetadata,
   url: 'https://burningbridgesai.cc',
-  title: 'Burning Bridges AI Video Generator — Your Photo, Your Party',
-  description:
-    'Make a Burning Bridges AI video from one photo. Choose your party scene, preview your photo, and create your take on the Drake-inspired trend. One-time video packs.',
 } as const;
 
 export const videoPacks = [
@@ -68,46 +67,70 @@ export const studioFaqs = [
   {
     question: 'What is Burning Bridges AI?',
     answer:
-      'Burning Bridges AI is a photo-to-video trend: a portrait becomes the lead in a party performance inspired by the Drake clip. This independent studio is built around that one creative task.',
+      'Burning Bridges AI is a photo-to-video generator for making your own version of the viral Burning Bridges trend. Upload one photo, choose a template, and the AI creates a party-style video with your subject in the lead.',
   },
   {
     question: 'How do I make a Burning Bridges AI video?',
     answer:
-      'Choose a clear photo of yourself or an adult who agreed to appear, pick your party scene, and review the video price. Generation opens when the studio is ready. No prompt writing or filming is required.',
+      'Upload a clear photo, choose a Burning Bridges template, confirm your generation settings, and start the video. You do not need to film the routine, edit the scene, or write a complicated AI video prompt.',
   },
   {
-    question: 'What does “where she at” mean?',
+    question: 'What does “Burning Bridges AI” mean?',
     answer:
-      'In this trend it refers to the playful hand-above-the-eyes gesture, as if looking across the room. People use the phrase to find the party clip and AI versions of it.',
+      'The phrase usually refers to AI-made versions of the party-video trend associated with Drake’s “Burning Bridges,” where a different person, pet or character becomes the lead subject in the scene.',
+  },
+  {
+    question: 'Is Burning Bridges AI related to Drake?',
+    answer:
+      'The online trend is inspired by the video style associated with Drake’s “Burning Bridges.” BurningBridgesAI.cc is an independent AI tool and is not affiliated with, sponsored by, or endorsed by Drake or his rights holders.',
+  },
+  {
+    question: 'What song is used for the Burning Bridges AI trend?',
+    answer:
+      'The trend is associated with Drake’s “Burning Bridges.” When publishing your video on a social platform, use audio you have the right to use or an official sound provided by that platform.',
+  },
+  {
+    question: 'Do I need to write a prompt?',
+    answer:
+      'No. The Burning Bridges scene and motion are already set up in the template, so you mainly choose a photo and a template before generating.',
+  },
+  {
+    question: 'What photo works best for Burning Bridges AI?',
+    answer:
+      'Use one person or pet with a clearly visible face, good lighting, and a head-to-waist or full-body composition. Avoid blurry group photos, heavy filters, hidden faces and extreme angles.',
+  },
+  {
+    question: 'Can I make a Burning Bridges AI video with my pet?',
+    answer:
+      'Yes. A clear photo of one pet can be used as the subject reference. Images where the head and body are easy to distinguish usually give the AI more useful visual information.',
+  },
+  {
+    question: 'Why does my face look different in the generated video?',
+    answer:
+      'AI video can change facial details as the subject moves, turns, or becomes partially obscured. A sharp, well-lit, front-facing source photo usually gives the model a stronger identity reference.',
+  },
+  {
+    question: 'How long is the Burning Bridges AI video?',
+    answer:
+      'The current Burning Bridges video shown in the generator is 20 seconds long.',
   },
   {
     question: 'Is Burning Bridges AI free?',
     answer:
-      'Browsing scenes and checking your photo are free. Finished videos will use one-time packs, starting at $9.90 for one video. Purchases are closed while generation is being connected.',
+      'Video generation uses credits. The generator displays the required credit amount before you create the video.',
   },
   {
-    question: 'Can I make a Drake AI video of myself?',
-    answer:
-      'The idea is to make yourself the lead in an inspired party scene. Use your own photo or permission from another adult. This service is independent and is not affiliated with Drake or his label.',
+    question: 'What quality is the generated video?',
+    answer: 'The current Burning Bridges generator offers HD 720p output.',
   },
   {
-    question: 'Which photos work best?',
+    question: 'Can I use a photo of another person?',
     answer:
-      'Use one person with their head and upper body visible, even lighting, and no sunglasses. JPG, PNG and WebP are supported, up to 20 MB, with at least 341 pixels on each side.',
+      'Only use photos of people who have agreed to appear in the generated video. The output is AI-generated content and should not be presented as real footage of that person.',
   },
   {
-    question: 'Does my video include the Burning Bridges song?',
+    question: 'Is BurningBridgesAI.cc an official Drake website?',
     answer:
-      'Yes. The finished 20-second Burning Bridges AI video includes the original template soundtrack, timed to the performance. Both party scenes include music.',
-  },
-  {
-    question: 'Is this a subscription?',
-    answer:
-      'No. Each credit pack is a one-time purchase, with no automatic renewal. Every Burning Bridges AI video costs 100 credits and includes the same video quality.',
-  },
-  {
-    question: 'Will the AI keep my face exactly the same?',
-    answer:
-      'AI video can change facial features, hands, clothes and background details. A clear, well-lit photo helps, but exact identity preservation is not guaranteed. The reference player is labeled so you can distinguish the trend from studio results.',
+      'No. BurningBridgesAI.cc is an independent AI video tool. It is not affiliated with, sponsored by, or endorsed by Drake, his label, or the rights holders of the original song or video.',
   },
 ] as const;

@@ -1,31 +1,30 @@
 import Image from 'next/image';
+import { ArrowUpRight } from 'lucide-react';
 
 const moments = [
   {
     image: 'walk-up',
-    time: '0–2 seconds',
-    title: 'The walk-up',
-    description: 'Step into the party and turn toward the camera.',
+    title: 'Step into the scene',
+    description:
+      'Your subject enters the party as the main character while the camera moves in and establishes the setting.',
   },
   {
     image: 'grin',
-    time: '2–6 seconds',
-    title: 'The grin',
+    title: 'Own the close-up',
     description:
-      'Lean toward the lens, smile, and bring a hand into the frame.',
+      'The camera gets closer as the performance becomes more expressive, keeping your uploaded subject at the center of the shot.',
   },
   {
     image: 'hype',
-    time: '6–15 seconds',
-    title: 'The hype',
-    description: 'Open your arms, move with the track, and turn to the room.',
+    title: 'Work the room',
+    description:
+      'The energy opens up with bigger gestures, movement and reactions around the lead character.',
   },
   {
     image: 'where-she-at',
-    time: '15–20 seconds',
-    title: 'Where she at?',
+    title: 'Finish on the meme moment',
     description:
-      'Look across the crowd with a hand above your eyes, then point at the camera.',
+      'The sequence ends with the recognizable hand-over-the-eyes, search-the-room gesture associated with the “where she at?” moment.',
   },
 ];
 
@@ -33,18 +32,21 @@ export function VideoMotionGuide() {
   return (
     <section
       className="bb-motion-section bb-shell"
-      id="about"
+      id="the-video"
       aria-labelledby="motion-title"
     >
       <header className="bb-content-heading">
-        <h2 id="motion-title">What happens in your Burning Bridges AI video</h2>
+        <span className="bb-section-kicker">THE VIDEO</span>
+        <h2 id="motion-title">What Happens in a Burning Bridges AI Video?</h2>
         <p>
-          Your photo becomes the lead in the same 20-second party performance.
-          The template provides the movement and original soundtrack.
+          Your photo becomes the lead in a fast, party-style AI video built
+          around the recognizable Burning Bridges trend. The camera moves in
+          close, the room reacts around your subject, and the clip builds toward
+          the search-the-room moment people recognize from the trend.
         </p>
       </header>
       <div className="bb-motion-grid">
-        {moments.map((moment) => (
+        {moments.map((moment, index) => (
           <article key={moment.image}>
             <div className="bb-motion-frame">
               <Image
@@ -54,11 +56,20 @@ export function VideoMotionGuide() {
                 sizes="(max-width: 700px) 44vw, 260px"
               />
             </div>
-            <span className="bb-motion-time">{moment.time}</span>
+            <span className="bb-motion-time">0{index + 1}</span>
             <h3>{moment.title}</h3>
             <p>{moment.description}</p>
           </article>
         ))}
+      </div>
+      <div className="bb-section-action">
+        <p>
+          One photo goes in. A complete Burning Bridges-style AI video comes
+          out.
+        </p>
+        <a className="bb-button" href="#create">
+          Make my video <ArrowUpRight size={16} />
+        </a>
       </div>
     </section>
   );

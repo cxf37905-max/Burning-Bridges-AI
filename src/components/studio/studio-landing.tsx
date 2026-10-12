@@ -1,8 +1,13 @@
-import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { VideoMotionGuide } from './video-motion-guide';
 import { VideoHowTo } from './video-how-to';
-import { StudioGuideList } from './studio-guide-list';
+import {
+  StudioSongGuide,
+  StudioTrendGuide,
+  StudioVideoComparison,
+} from './studio-trend-guide';
+import { VideoTemplates } from './video-templates';
+import { VideoPhotoGuide } from './video-photo-guide';
 import { VideoWorkspace } from './video-workspace';
 import { VideoPricing } from './video-pricing';
 import { studioFaqs } from '@/studio/catalog';
@@ -18,44 +23,38 @@ export function StudioLanding({
 }) {
   return (
     <>
-      <section className="bb-hero bb-shell">
+      <section className="bb-hero bb-shell" id="create">
         <div className="bb-hero-copy">
           <h1>
-            Burning Bridges AI <span>Video Generator.</span>
+            Burning Bridges AI <span>Video Generator</span>
           </h1>
           <p className="bb-hero-description">
-            Upload one photo. Make your own Burning Bridges AI video with the
-            original motion and music.
+            Upload one photo and turn it into a 20-second Burning Bridges AI
+            video inspired by the viral Drake trend. No filming, editing, or
+            prompts.
           </p>
         </div>
         <VideoWorkspace {...availability} />
       </section>
       <VideoMotionGuide />
       <VideoHowTo />
+      <StudioTrendGuide />
+      <StudioVideoComparison />
+      <VideoTemplates />
+      <VideoPhotoGuide />
+      <StudioSongGuide />
       <VideoPricing purchasesReady={availability.purchasesReady} />
-      <StudioGuideList />
       <section className="bb-faq bb-shell" id="faq">
         <div className="bb-faq-heading">
-          <span className="bb-section-kicker">BEFORE YOU GENERATE</span>
+          <span className="bb-section-kicker">FAQ</span>
           <h2>Burning Bridges AI FAQ</h2>
-          <p>
-            Photos, pricing, the Drake trend,
-            <br />
-            and what to expect from your take.
-          </p>
-          <Link
-            className="bb-text-link"
-            href="/guides/burning-bridges-ai-photo-guide"
-          >
-            Get your photo ready <ArrowUpRight size={16} />
-          </Link>
         </div>
         <div className="bb-faq-list">
           {studioFaqs.map((faq) => (
             <details key={faq.question}>
               <summary>
                 {faq.question}
-                <span>+</span>
+                <span aria-hidden="true">+</span>
               </summary>
               <p>{faq.answer}</p>
             </details>
@@ -67,18 +66,18 @@ export function StudioLanding({
           ↗
         </div>
         <div>
-          <span className="bb-section-kicker">
-            YOU HAVE THE PHOTO. WE HAVE THE PARTY.
-          </span>
-          <h2>
-            Your Burning Bridges AI
-            <br />
-            moment starts here.
-          </h2>
-          <a className="bb-button" href="#studio">
-            Choose your photo <ArrowUpRight size={18} />
+          <h2>Make Your Burning Bridges AI Video</h2>
+          <p className="bb-final-copy">
+            Choose a photo, pick a scene, and generate your own take on the
+            Burning Bridges trend.
+          </p>
+          <p className="bb-final-specs">
+            One photo · 20-second video · HD 720p
+          </p>
+          <a className="bb-button" href="#create">
+            Make my video <ArrowUpRight size={18} />
           </a>
-          <p>Explore the studio now. Generation opens soon.</p>
+          <p>No filming. No editing. No prompt required.</p>
         </div>
       </section>
     </>

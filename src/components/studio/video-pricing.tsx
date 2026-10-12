@@ -26,18 +26,17 @@ export function VideoPricing({ purchasesReady }: { purchasesReady: boolean }) {
       <div className="bb-pricing-heading">
         <div>
           <span className="bb-section-kicker">ONE-TIME VIDEO PACKS</span>
-          <h2 id="pricing-title">
-            Burning Bridges AI pricing.
-            <br />
-            <span>All the party. No subscription.</span>
-          </h2>
+          <h2 id="pricing-title">Burning Bridges AI Pricing</h2>
         </div>
         <p>
-          Pick a pack. Make it yours.
-          <br />
-          Every pack gets the same video quality.
+          The generator shows the credit cost before you create your video, so
+          you can see what the selected output requires before you generate.
         </p>
       </div>
+      <p className="bb-pricing-credit-cost">
+        The current HD 720p option uses {videoCreditCost} credits per
+        generation.
+      </p>
       <div className="bb-price-grid">
         {videoPacks.map((pack) => (
           <article

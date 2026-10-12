@@ -15,6 +15,9 @@ import type { ReactNode } from 'react';
 
 import '@/styles/mdx.css';
 
+// 模板文档保留可访问，暂不作为本站产品内容参与索引。
+export const metadata = { robots: { index: false, follow: false } };
+
 interface DocsLayoutProps {
   children: ReactNode;
   params: Promise<{ locale: Locale }>;

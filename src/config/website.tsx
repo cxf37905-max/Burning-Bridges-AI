@@ -92,19 +92,11 @@ export const websiteConfig: WebsiteConfig = {
   },
   metadata: {
     images: {
-      ogImage: '/og.png',
+      ogImage: '/studio/og.jpg',
       logoLight: '/logo.png',
       logoDark: '/logo-dark.png',
     },
-    social: {
-      github: 'https://github.com/MkSaaSHQ',
-      twitter: 'https://mksaas.link/twitter',
-      blueSky: 'https://mksaas.link/bsky',
-      discord: 'https://mksaas.link/discord',
-      mastodon: 'https://mksaas.link/mastodon',
-      linkedin: 'https://mksaas.link/linkedin',
-      youtube: 'https://mksaas.link/youtube',
-    },
+    social: {},
   },
   features: {
     enableUpgradeCard: false,
@@ -141,12 +133,12 @@ export const websiteConfig: WebsiteConfig = {
     },
   },
   blog: {
-    enable: true,
+    enable: false,
     paginationSize: 6,
     relatedPostsSize: 3,
   },
   docs: {
-    enable: true,
+    enable: false,
   },
   mail: {
     enable: true,

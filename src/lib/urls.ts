@@ -1,9 +1,12 @@
 import { LOCALES, routing } from '@/i18n/routing';
+import { studioBrand } from '@/studio/catalog';
 import type { Locale } from 'next-intl';
 
 const baseUrl =
   process.env.NEXT_PUBLIC_BASE_URL ??
-  `http://localhost:${process.env.PORT ?? 3000}`;
+  (process.env.NODE_ENV === 'production'
+    ? studioBrand.url
+    : `http://localhost:${process.env.PORT ?? 3000}`);
 
 /**
  * Get the base URL of the application

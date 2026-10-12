@@ -21,10 +21,10 @@ export function StudioHeader() {
           </span>
         </Link>
         <nav className="bb-nav-links" aria-label="Main navigation">
-          <Link href="/#studio">Create</Link>
-          <Link href="/#about">The video</Link>
+          <Link href="/#create">Create</Link>
+          <Link href="/#the-video">The video</Link>
           <Link href="/#how-it-works">How it works</Link>
-          <Link href="/pricing">Pricing</Link>
+          <Link href="/#pricing">Pricing</Link>
         </nav>
         <div className="bb-nav-actions">
           <Suspense
@@ -36,7 +36,7 @@ export function StudioHeader() {
           >
             <StudioAccount authReady={getStudioAvailability().authReady} />
           </Suspense>
-          <Link className="bb-button bb-button-small" href="/#studio">
+          <Link className="bb-button bb-button-small" href="/#create">
             Make my video <ArrowUpRight size={15} />
           </Link>
         </div>
