@@ -71,6 +71,34 @@
       "bytes": 501989,
       "sha256": "69755b99e38e7258deb486eb83a7cffb6b2280469dcc85fc87d77163f78a0031",
       "contentType": "audio/mp4"
+    },
+    {
+      "filename": "burning-bridges-ref-2-overlap.mp4",
+      "generatedAt": "2026-10-13T06:47:56.867Z",
+      "bytes": 3702126,
+      "sha256": "678926514e521a0f7f890b3c16e7a3e81cff1a40c4fafb0811d27fbf1d6d20ab",
+      "contentType": "video/mp4",
+      "overlapFrames": 24,
+      "fps": 24,
+      "derivedFrom": [
+        "burning-bridges-ref-1.mp4",
+        "burning-bridges-ref-2.mp4"
+      ],
+      "description": "第一段末尾24帧加完整第二段；只用于带重叠的新任务。"
+    },
+    {
+      "filename": "burning-bridges-after-party-ref-2-overlap.mp4",
+      "generatedAt": "2026-10-13T06:47:58.267Z",
+      "bytes": 2147956,
+      "sha256": "48176e184ff72ce6f67006bbc50f780027789c03b3161d72147d2c011d6ba67d",
+      "contentType": "video/mp4",
+      "overlapFrames": 24,
+      "fps": 24,
+      "derivedFrom": [
+        "burning-bridges-after-party-ref-1.mp4",
+        "burning-bridges-after-party-ref-2.mp4"
+      ],
+      "description": "第一段末尾24帧加完整第二段；只用于带重叠的新任务。"
     }
   ]
 }

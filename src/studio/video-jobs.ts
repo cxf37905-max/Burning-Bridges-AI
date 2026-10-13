@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { getBaseUrl } from '@/lib/urls';
 import { videoExpiresAt, videoHasExpired } from './media-retention';
-import { studioVideo } from '@/db/schema';
+import { creditTransaction, studioVideo } from '@/db/schema';
 import {
   consumeCreditsInTransaction,
   getUserCredits,
@@ -13,6 +13,9 @@ import {
 } from '@/credits/credits';
 import { videoCreditCost } from './catalog';
 import { storeStudioPhoto } from './photo-storage';
+import { storeStudioReference } from './reference-storage';
+import { createFalWebhookUrl } from './fal-webhook-url';
+import { FalSubmissionNotSentError } from './fal-submission-error';
 import { getKlingTemplate } from './kling-templates';
 import { composeStudioVideo } from './video-storage';
 import {
@@ -20,7 +23,7 @@ import {
   createKlingPipeline,
   klingPipelineSchema,
   klingProgressMessage,
-  refundableSegmentFailures,
+  returnableVideoCreditEvidence,
   type KlingPipeline,
 } from './kling-pipeline';
 import {
@@ -54,14 +57,14 @@ export async function getOwnedVideo(id: string, userId: string) {
   return video;
 }
 
-async function refundFailedVideo(
+async function returnFailedVideoCredits(
   id: string,
   pipeline: KlingPipeline,
   leaseOwner: string
 ) {
-  if (!refundableSegmentFailures(pipeline))
+  if (!returnableVideoCreditEvidence(pipeline))
     throw new Error(
-      `Video ${id} has no confirmed refundable segment failures.`
+      `Video ${id} has no confirmed evidence for returning credits.`
     );
   const db = await getDb();
   await db.transaction(async (tx) => {
@@ -145,7 +148,8 @@ async function advanceOwnedVideo(id: string, userId: string, picture?: Buffer) {
       pipeline = createKlingPipeline(
         photoUrl,
         video.sceneId,
-        process.env.STUDIO_KLING_TIER || 'standard'
+        process.env.STUDIO_KLING_TIER || 'standard',
+        await storeStudioReference(id, video.sceneId)
       );
       await persist(pipeline);
     } else {
@@ -153,15 +157,34 @@ async function advanceOwnedVideo(id: string, userId: string, picture?: Buffer) {
     }
     await advanceKlingPipeline(pipeline, {
       persist,
-      submit: submitFalTask,
+      submit: async (endpoint, input, webhookUrl) => {
+        // 每次真正提交模型前重新核对已提交的扣积分流水和当前任务租约。
+        const [charged] = await db.select({ id: creditTransaction.id })
+          .from(creditTransaction).innerJoin(studioVideo, and(
+            eq(studioVideo.id, id), eq(studioVideo.userId, userId),
+            eq(studioVideo.leaseOwner, owner), isNull(studioVideo.refundedAt),
+            inArray(studioVideo.status, ['reserved', 'processing'])
+          )).where(and(
+            eq(creditTransaction.userId, userId),
+            eq(creditTransaction.idempotencyKey, 'video:' + id),
+            eq(creditTransaction.type, 'USAGE'),
+            eq(creditTransaction.amount, -videoCreditCost)
+          )).limit(1);
+        if (!charged) throw new Error(`Video ${id} has no valid committed credit consumption or lease.`);
+        return submitFalTask(endpoint, input, webhookUrl);
+      },
+      webhookUrl: (stepId, submissionId) =>
+        createFalWebhookUrl({ videoId: id, stepId, submissionId }),
       read: readFalTask,
-      compose: (first, second, sceneId) =>
-        composeStudioVideo(id, first, second, sceneId),
+      compose: (first, second, sceneId, overlapFrames) =>
+        composeStudioVideo(id, first, second, sceneId, overlapFrames),
       getTaskFailure: (reason) =>
         reason instanceof FalTaskFailedError ? reason.failure : null,
+      getUnsentSubmission: (reason) =>
+        reason instanceof FalSubmissionNotSentError ? reason.proof : null,
     });
-    if (refundableSegmentFailures(pipeline))
-      await refundFailedVideo(id, pipeline, owner);
+    if (returnableVideoCreditEvidence(pipeline))
+      await returnFailedVideoCredits(id, pipeline, owner);
     else if (pipeline.steps.some((step) => step.state === 'unknown'))
       await persist(pipeline);
   } catch (reason) {
@@ -223,7 +246,8 @@ export async function createStudioVideo(
   const pipeline = createKlingPipeline(
     photoUrl,
     sceneId,
-    process.env.STUDIO_KLING_TIER || 'standard'
+    process.env.STUDIO_KLING_TIER || 'standard',
+    await storeStudioReference(`${id}-${photoHash}`, sceneId)
   );
   await db.transaction(async (tx) => {
     const [created] = await tx

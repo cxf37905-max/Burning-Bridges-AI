@@ -1,7 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
+import useSWR from 'swr';
+import { useQueryClient } from '@tanstack/react-query';
+import { authClient } from '@/lib/auth-client';
+import { creditsKeys, useCreditBalance } from '@/hooks/use-credits';
 import {
   clearPhotoDraft,
   readPhotoDraft,
@@ -10,7 +13,6 @@ import {
 import { TemplatePreviewDialog } from './template-preview-dialog';
 import { StudioSigninDialog } from './studio-signin-dialog';
 import { CreditPackDialog } from './credit-pack-dialog';
-import { readStudioAccount } from '@/studio/account-query';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Check, LoaderCircle, Play, Plus, X } from 'lucide-react';
@@ -56,23 +58,34 @@ export function VideoCreator({
   purchasesReady,
   sceneId,
   onSceneChange: setSceneId,
-  jobId,
   onJobChange: setJobId,
+  onSubmittingChange,
 }: {
   generationReady: boolean;
   authReady: boolean;
   purchasesReady: boolean;
   sceneId: PartySceneId;
   onSceneChange: (id: PartySceneId) => void;
-  jobId: string | null;
-  onJobChange: (id: string | null) => void;
+  onJobChange: (id: string) => void;
+  onSubmittingChange: (submitting: boolean) => void;
 }) {
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
   const [previewSceneId, setPreviewSceneId] = useState<PartySceneId | null>(
     null
   );
   const [signinOpen, setSigninOpen] = useState(false);
-  const { data: account } = useSWR('/api/studio/account', readStudioAccount);
+  const {
+    data: session,
+    isPending: sessionPending,
+    error: sessionError,
+    refetch: refreshSession,
+  } = authClient.useSession();
+  const user = session?.user;
+  const {
+    data: credits,
+    error: creditsError,
+    refetch: refreshCredits,
+  } = useCreditBalance(user?.id);
   const [error, setError] = useState('');
   const [needsPack, setNeedsPack] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -86,8 +99,8 @@ export function VideoCreator({
   const requestId = useRef<string | null>(null);
   const submitLock = useRef(false);
   const draftRestored = useRef(false);
-  const { mutate } = useSWRConfig();
-  useSWR('studio-photo-draft', readPhotoDraft, {
+  const queryClient = useQueryClient();
+  useSWR(['studio-photo-draft', user?.id ?? 'anonymous'], readPhotoDraft, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     shouldRetryOnError: false,
@@ -97,9 +110,14 @@ export function VideoCreator({
         setCheckoutNotice(true);
         pageUrl.searchParams.delete('checkout');
         window.history.replaceState(window.history.state, '', pageUrl);
-        void mutate('/api/studio/account');
+        void queryClient.invalidateQueries({ queryKey: creditsKeys.all });
       }
-      if (!draft || draftRestored.current || selectionVersion.current !== 0)
+      if (
+        !draft ||
+        (draft.userId && draft.userId !== user?.id) ||
+        draftRestored.current ||
+        selectionVersion.current !== 0
+      )
         return;
       draftRestored.current = true;
       const version = selectionVersion.current;
@@ -109,7 +127,7 @@ export function VideoCreator({
           setPhoto(selection);
           setSceneId(draft.sceneId);
           setConsent(false);
-          requestId.current = draft.requestId;
+          requestId.current = draft.jobId ? null : draft.requestId;
           setRestored(true);
         })
         .catch((reason: Error) => setError(reason.message));
@@ -126,13 +144,20 @@ export function VideoCreator({
       consent,
       requestId: requestId.current,
       savedAt: Date.now(),
+      userId: user?.id,
     });
   }
 
   async function createVideo() {
-    if (submitLock.current || reading) return;
+    if (
+      submitLock.current ||
+      reading ||
+      sessionPending ||
+      (sessionError && !user)
+    )
+      return;
     setError('');
-    if (!account?.user) {
+    if (!user) {
       try {
         await preservePhotoDraft();
         setSigninOpen(true);
@@ -153,7 +178,12 @@ export function VideoCreator({
       setError('Tick the box to confirm you are allowed to use this photo.');
       return;
     }
-    if (account.user.credits < videoCreditCost) {
+    if (credits === undefined) {
+      setError('Your credits are still loading. Please try again.');
+      void refreshCredits();
+      return;
+    }
+    if (credits < videoCreditCost) {
       setNeedsPack(true);
       return;
     }
@@ -163,12 +193,14 @@ export function VideoCreator({
     }
     submitLock.current = true;
     requestId.current ||= crypto.randomUUID();
+    const generationRequestId = requestId.current;
     const form = new FormData();
     form.set('photo', photo.file);
     form.set('sceneId', sceneId);
     form.set('consent', 'true');
-    form.set('requestId', requestId.current);
+    form.set('requestId', generationRequestId);
     setSubmitting(true);
+    onSubmittingChange(true);
     setError('');
     setNeedsPack(false);
     try {
@@ -176,8 +208,9 @@ export function VideoCreator({
         file: photo.file,
         sceneId,
         consent,
-        requestId: requestId.current,
+        requestId: generationRequestId,
         savedAt: Date.now(),
+        userId: user.id,
       });
       const response = await fetch('/api/studio/videos', {
         method: 'POST',
@@ -185,7 +218,7 @@ export function VideoCreator({
       });
       if (response.status === 401) {
         setSigninOpen(true);
-        void mutate('/api/studio/account');
+        void refreshSession();
         return;
       }
       const result = await response.json();
@@ -198,8 +231,24 @@ export function VideoCreator({
       setJobId(result.id);
       requestId.current = null;
       setRestored(false);
-      await clearPhotoDraft();
-      void mutate('/api/studio/account');
+      try {
+        await savePhotoDraft({
+          file: photo.file,
+          sceneId,
+          consent,
+          requestId: generationRequestId,
+          savedAt: Date.now(),
+          userId: user.id,
+          jobId: result.id,
+        });
+      } catch {
+        setError(
+          'Your video is saved in My videos, but this browser could not keep your photo.'
+        );
+      }
+      void queryClient.invalidateQueries({
+        queryKey: creditsKeys.balance(user.id),
+      });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -209,6 +258,7 @@ export function VideoCreator({
     } finally {
       submitLock.current = false;
       setSubmitting(false);
+      onSubmittingChange(false);
     }
   }
 
@@ -216,7 +266,6 @@ export function VideoCreator({
     if (!file || submitting) return;
     const version = ++selectionVersion.current;
     requestId.current = null;
-    setJobId(null);
     setError('');
     setReading(true);
     setRestored(false);
@@ -298,7 +347,6 @@ export function VideoCreator({
                     setReading(false);
                     setError('');
                     requestId.current = null;
-                    setJobId(null);
                   }}
                 >
                   <X size={15} />
@@ -378,7 +426,6 @@ export function VideoCreator({
                         setError(reason.message)
                       );
                       requestId.current = null;
-                      setJobId(null);
                     }}
                     disabled={submitting}
                   />
@@ -433,32 +480,31 @@ export function VideoCreator({
           <button
             type="button"
             className="bb-button bb-create-button"
-            disabled={reading || submitting}
+            disabled={
+              reading || submitting || sessionPending || (!user && !!sessionError)
+            }
             onClick={createVideo}
+            aria-busy={submitting}
           >
             {submitting
-              ? 'Starting your video…'
-              : account?.user
-                ? `Generate video · ${videoCreditCost} credits`
-                : 'Sign in to make your video'}
+              ? 'Submitting your video…'
+              : sessionPending || (!user && sessionError)
+                ? sessionError
+                  ? 'Could not load your account'
+                  : 'Loading your account…'
+                : user
+                  ? `Generate video · ${videoCreditCost} credits`
+                  : 'Sign in to make your video'}
             <ArrowRight size={17} />
           </button>
-          {jobId && (
+          {user && creditsError && credits === undefined && (
             <button
               type="button"
               className="bb-text-link"
-              onClick={() => {
-                setJobId(null);
-                requestId.current = null;
-              }}
+              onClick={() => void refreshCredits()}
             >
-              Make another video ↗
+              Could not load credits. Try again
             </button>
-          )}
-          {jobId && (
-            <a href="/library" className="bb-text-link">
-              Your videos and credits ↗
-            </a>
           )}
         </div>
       </div>
@@ -475,7 +521,7 @@ export function VideoCreator({
         open={needsPack}
         onOpenChange={setNeedsPack}
         purchasesReady={purchasesReady}
-        balance={account?.user?.credits || 0}
+        balance={credits ?? 0}
         beforeCheckout={preservePhotoDraft}
       />
     </section>

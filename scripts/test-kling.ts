@@ -18,7 +18,7 @@ import {
   FalTaskFailedError,
   readFalTask,
   submitFalTask,
-  uploadFalTestPhoto,
+  uploadFalTestFile,
 } from '../src/studio/fal';
 import {
   createKlingPipeline,
@@ -31,9 +31,13 @@ import { getKlingTemplate } from '../src/studio/kling-templates';
 import { renderKlingTestPreview } from '../src/studio/kling-test-preview';
 import { MAX_PHOTO_BYTES } from '../src/studio/photo-validation';
 import { normalizeStudioPhoto } from '../src/studio/photo-storage';
-import { composeKlingVideo } from '../src/studio/video-composition';
+import {
+  assertStudioCompositionAvailable,
+  composeKlingVideo,
+} from '../src/studio/video-composition';
+import { FalSubmissionNotSentError } from '../src/studio/fal-submission-error';
 
-dotenv.config({ path: '.env.local', quiet: true });
+dotenv.config({ path: '.env', quiet: true });
 const { values } = parseArgs({
   options: {
     photo: { type: 'string' },
@@ -79,6 +83,27 @@ async function readTestPhoto(filename: string) {
   );
 }
 
+async function createTestPipeline(picture: Buffer) {
+  const { overlapReference } = getKlingTemplate(values.scene);
+  await assertStudioCompositionAvailable(values.scene);
+  const photoUrl = await uploadFalTestFile(
+    picture,
+    'studio-photo.jpg',
+    'image/jpeg'
+  );
+  const secondReferenceUrl = await uploadFalTestFile(
+    await readFile(
+      path.resolve('public/studio/reference', overlapReference.filename)
+    ),
+    overlapReference.filename,
+    'video/mp4'
+  );
+  return createKlingPipeline(photoUrl, values.scene, values.tier, {
+    secondReferenceUrl,
+    overlapFrames: overlapReference.frames,
+  });
+}
+
 function restoreRequestIdentity(pipeline: KlingPipeline) {
   if (!values['recover-step'] && !values['request-id']) return;
   const requestId = z.string().uuid().parse(values['request-id']);
@@ -119,7 +144,7 @@ async function runTest() {
   }
   if (!process.env.FAL_KEY)
     throw new Error(
-      '请先在 .env.local 填入 FAL_KEY，获取入口：https://fal.ai/dashboard/keys'
+      '请先在 .env 填入 FAL_KEY，获取入口：https://fal.ai/dashboard/keys'
     );
   const stateFile = values.resume
     ? path.resolve(values.resume)
@@ -144,11 +169,7 @@ async function runTest() {
     await lock.writeFile(String(process.pid));
     const pipeline = values.resume
       ? klingPipelineSchema.parse(JSON.parse(await readFile(stateFile, 'utf8')))
-      : createKlingPipeline(
-          await uploadFalTestPhoto(picture!),
-          values.scene,
-          values.tier
-        );
+      : await createTestPipeline(picture!);
     restoreRequestIdentity(pipeline);
     await savePipeline(stateFile, pipeline);
     console.log(
@@ -166,17 +187,25 @@ async function runTest() {
           persist: (next) => savePipeline(stateFile, next),
           submit: submitFalTask,
           read: readFalTask,
-          compose: (first, second, sceneId) =>
-            composeKlingVideo(first, second, sceneId, async (filename) => {
-              await copyFile(
-                filename,
-                path.join(path.dirname(stateFile), 'finished.mp4')
-              );
-              // 测试预览使用同目录文件；状态中的地址仅作为完成标记。
-              return 'https://local-test.invalid/finished.mp4';
-            }),
+          compose: (first, second, sceneId, overlapFrames) =>
+            composeKlingVideo(
+              first,
+              second,
+              sceneId,
+              async (filename) => {
+                await copyFile(
+                  filename,
+                  path.join(path.dirname(stateFile), 'finished.mp4')
+                );
+                // 测试预览使用同目录文件；状态中的地址仅作为完成标记。
+                return 'https://local-test.invalid/finished.mp4';
+              },
+              overlapFrames
+            ),
           getTaskFailure: (reason) =>
             reason instanceof FalTaskFailedError ? reason.failure : null,
+          getUnsentSubmission: (reason) =>
+            reason instanceof FalSubmissionNotSentError ? reason.proof : null,
         });
       } catch (reason) {
         if (

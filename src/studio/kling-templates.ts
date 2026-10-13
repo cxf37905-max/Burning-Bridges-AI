@@ -16,6 +16,10 @@ export function getKlingTemplate(sceneId: string) {
         },
       ],
       audioUrl: `${referenceOrigin}/burning-bridges-ref-audio.m4a`,
+      overlapReference: {
+        filename: 'burning-bridges-ref-2-overlap.mp4',
+        frames: 24 as const,
+      },
       width: 720,
       height: 1280,
       fps: 24,
@@ -34,6 +38,10 @@ export function getKlingTemplate(sceneId: string) {
         },
       ],
       audioUrl: `${referenceOrigin}/burning-bridges-after-party-ref-audio.m4a`,
+      overlapReference: {
+        filename: 'burning-bridges-after-party-ref-2-overlap.mp4',
+        frames: 24 as const,
+      },
       width: 1280,
       height: 720,
       fps: 24,

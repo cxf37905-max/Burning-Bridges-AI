@@ -29,11 +29,26 @@ import {
   type Price,
 } from '../types';
 
+// GraphQL 的 JSON 字段可能返回对象或序列化字符串，在支付商边界统一解析。
+const waffoMetadataSchema = z.preprocess((value, context) => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch (reason) {
+    if (!(reason instanceof SyntaxError)) throw reason;
+    context.addIssue({
+      code: 'custom',
+      message: 'Waffo metadata 必须是有效的 JSON 对象',
+    });
+    return z.NEVER;
+  }
+}, z.record(z.string(), z.string()).nullish());
+
 const waffoProductSchema = z.object({
   id: z.string().min(1),
   status: z.string(),
   billingPeriod: z.string().nullish(),
-  metadata: z.record(z.string(), z.string()).nullish(),
+  metadata: waffoMetadataSchema,
   prices: z.array(
     z.object({
       currency: z.string(),
@@ -46,7 +61,7 @@ const waffoOrderSchema = z.object({
   status: z.string(),
   testMode: z.boolean(),
   currency: z.string().length(3),
-  metadata: z.record(z.string(), z.string()).nullish(),
+  metadata: waffoMetadataSchema,
   orderMerchantExternalId: z.string().nullish(),
   onetimeProduct: z.object({ id: z.string() }).nullish(),
   subscriptionProduct: z.object({ id: z.string() }).nullish(),
@@ -93,7 +108,7 @@ const waffoEventSchema = z.object({
     orderId: z.string().min(1),
     currency: z.string().length(3),
     orderMerchantExternalId: z.string().optional(),
-    orderMetadata: z.record(z.string(), z.string()).optional(),
+    orderMetadata: waffoMetadataSchema,
     chargedAmount: z.string().optional(),
     refundedAmount: z.string().optional(),
     originalChargedAmount: z.string().optional(),

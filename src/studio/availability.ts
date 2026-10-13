@@ -1,5 +1,6 @@
 import 'server-only';
 import { websiteConfig } from '@/config/website';
+import { falWebhookOrigin } from './fal-webhook-url';
 
 export function getStudioAvailability() {
   const authReady = Boolean(
@@ -30,6 +31,7 @@ export function getStudioAvailability() {
     process.env.STUDIO_LAUNCH_READY === 'true' &&
     Boolean(
       process.env.FAL_KEY &&
+        falWebhookOrigin() &&
         process.env.CRON_SECRET &&
         process.env.CRON_SECRET.length >= 32 &&
         ['standard', 'pro'].includes(

@@ -2,30 +2,36 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import useSWR from 'swr';
-import { readStudioAccount } from '@/studio/account-query';
+import { authClient } from '@/lib/auth-client';
+import { useMounted } from '@/hooks/use-mounted';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { StudioAccountMenu } from './studio-account-menu';
 import { StudioSigninDialog } from './studio-signin-dialog';
 
-export function StudioAccount({
-  balanceOnly = false,
-  authReady = false,
-}: {
-  balanceOnly?: boolean;
-  authReady?: boolean;
-}) {
+export function StudioAccount({ authReady = false }: { authReady?: boolean }) {
   const searchParams = useSearchParams();
   const requestedMode = searchParams.get('auth');
   const authRequested =
     requestedMode === 'login' || requestedMode === 'register';
   const [signinOpen, setSigninOpen] = useState(false);
-  const { data } = useSWR('/api/studio/account', readStudioAccount, {
-    revalidateOnFocus: true,
-    refreshInterval: 15_000,
-  });
-  if (!data?.user)
-    return balanceOnly ? null : (
+  const mounted = useMounted();
+  const { data: session, isPending, error, refetch } = authClient.useSession();
+  // 尚未取得账户和加载失败都不代表用户已退出登录。
+  if (!mounted || isPending)
+    return <Skeleton className="size-8 rounded-full" />;
+  if (!session?.user && error)
+    return (
+      <button
+        type="button"
+        className="bb-signin"
+        onClick={() => void refetch()}
+      >
+        Retry account
+      </button>
+    );
+  if (!session?.user)
+    return (
       <>
         <button
           type="button"
@@ -53,12 +59,5 @@ export function StudioAccount({
         />
       </>
     );
-  if (balanceOnly)
-    return (
-      <div className="bb-library-balance">
-        <strong>{data.user.credits}</strong>
-        <span>credits available</span>
-      </div>
-    );
-  return <StudioAccountMenu user={data.user} />;
+  return <StudioAccountMenu user={session.user} />;
 }

@@ -7,14 +7,20 @@ export async function composeStudioVideo(
   jobId: string,
   first: string,
   second: string,
-  sceneId: string
+  sceneId: string,
+  overlapFrames = 0
 ) {
-  return composeKlingVideo(first, second, sceneId, async (filename) =>
-    storeR2Object(
-      `studio-results/${jobId}.mp4`,
-      await readFile(filename),
-      'video/mp4',
-      604800
-    )
+  return composeKlingVideo(
+    first,
+    second,
+    sceneId,
+    async (filename) =>
+      storeR2Object(
+        `studio-results/${jobId}.mp4`,
+        await readFile(filename),
+        'video/mp4',
+        604800
+      ),
+    overlapFrames
   );
 }

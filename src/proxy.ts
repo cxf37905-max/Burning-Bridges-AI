@@ -33,6 +33,7 @@ export default function proxy(request: NextRequest) {
       pathname.startsWith('/api/studio/') ||
       pathname.startsWith('/api/auth/') ||
       pathname === '/api/webhooks/waffo' ||
+      pathname === '/api/webhooks/fal' ||
       pathname === '/api/storage/upload'
     )
       return NextResponse.next();

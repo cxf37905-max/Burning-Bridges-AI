@@ -8,7 +8,7 @@ import { getDb } from '@/db';
 import { creditTransaction, userCredit } from '@/db/schema';
 import { findPlanByPlanId, findPlanByPriceId } from '@/lib/price-plan';
 import { addDays, addMonths } from 'date-fns';
-import { and, asc, eq, gt, isNull, lte, not, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, isNull, lte, not, or, sql } from 'drizzle-orm';
 import { CREDIT_TRANSACTION_TYPE } from './types';
 
 type CreditDatabase = Awaited<ReturnType<typeof getDb>>;
@@ -35,10 +35,33 @@ function getMonthlyCreditKey(type: string, userId: string, date = new Date()) {
  * @returns User's current credit balance
  */
 export async function getUserCredits(userId: string): Promise<number> {
+  const balance = await readUserCreditBalance(userId);
+  if (!balance?.hasExpiredCredits) return balance?.currentCredits ?? 0;
   await processExpiredCredits(userId);
+  return (await readUserCreditBalance(userId))?.currentCredits ?? 0;
+}
+
+async function readUserCreditBalance(userId: string) {
   const db = await getDb();
+  const expiredCredits = db
+    .select({ id: creditTransaction.id })
+    .from(creditTransaction)
+    .where(
+      and(
+        eq(creditTransaction.userId, userId),
+        not(eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.USAGE)),
+        not(eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.EXPIRE)),
+        isNull(creditTransaction.expirationDateProcessedAt),
+        gt(creditTransaction.remainingAmount, 0),
+        lte(creditTransaction.expirationDate, new Date())
+      )
+    );
+  // 常规查询只读余额；发现到期积分时才进入原有的事务清理流程。
   const records = await db
-    .select({ currentCredits: userCredit.currentCredits })
+    .select({
+      currentCredits: userCredit.currentCredits,
+      hasExpiredCredits: exists(expiredCredits),
+    })
     .from(userCredit)
     .where(eq(userCredit.userId, userId))
     .limit(2);
@@ -47,7 +70,7 @@ export async function getUserCredits(userId: string): Promise<number> {
     throw new Error(`Multiple credit balance records found for user ${userId}`);
   }
 
-  return records[0]?.currentCredits ?? 0;
+  return records[0];
 }
 
 /**
@@ -244,7 +267,7 @@ export async function refundVideoCreditsInTransaction(
     userId,
     amount: -debit.amount,
     type: CREDIT_TRANSACTION_TYPE.REFUND,
-    description: 'Failed video refund',
+    description: 'Credits returned for failed video',
     paymentId: videoId,
     idempotencyKey: 'video-refund:' + videoId,
     expirationDate:

@@ -1,6 +1,8 @@
 'use client';
 import { useId, useState } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
+import useSWR from 'swr';
+import { useQueryClient } from '@tanstack/react-query';
+import { creditsKeys } from '@/hooks/use-credits';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { authCallbackUrl, authRedirect } from '@/lib/auth-redirect';
-import { readStudioAccount } from '@/studio/account-query';
+import { readStudioAuthOptions } from '@/studio/auth-options-query';
 import { Input } from '@/components/ui/input';
 import { AuthCard } from './auth-card';
 import { SocialLoginButton } from './social-login-button';
@@ -39,8 +41,12 @@ export function LoginForm({
   const destination = authRedirect(
     callbackUrl || searchParams.get('callbackUrl')
   );
-  const { data: account } = useSWR('/api/studio/account', readStudioAccount);
-  const { mutate } = useSWRConfig();
+  const { data: authOptions } = useSWR(
+    '/api/studio/auth-options',
+    readStudioAuthOptions
+  );
+  const { refetch: refreshSession } = authClient.useSession();
+  const queryClient = useQueryClient();
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -80,7 +86,8 @@ export function LoginForm({
           return;
         }
       }
-      await mutate('/api/studio/account');
+      void refreshSession();
+      void queryClient.invalidateQueries({ queryKey: creditsKeys.all });
       if (onAuthenticated && destination === '/#studio') {
         onAuthenticated();
         router.refresh();
@@ -164,7 +171,7 @@ export function LoginForm({
         <button
           type="submit"
           className="bb-button"
-          disabled={pending || !account?.auth.email}
+          disabled={pending || !authOptions?.email}
         >
           {pending && <LoaderCircle size={18} className="bb-spin" />}
           {pending ? 'Signing in…' : 'Sign in with email'}

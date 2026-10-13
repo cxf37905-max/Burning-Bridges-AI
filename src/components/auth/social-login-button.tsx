@@ -5,7 +5,7 @@ import { LoaderCircle } from 'lucide-react';
 import { GoogleIcon } from '@/components/icons/google';
 import { authClient } from '@/lib/auth-client';
 import { authCallbackUrl } from '@/lib/auth-redirect';
-import { readStudioAccount } from '@/studio/account-query';
+import { readStudioAuthOptions } from '@/studio/auth-options-query';
 
 export function SocialLoginButton({
   callbackUrl,
@@ -14,7 +14,10 @@ export function SocialLoginButton({
   callbackUrl?: string;
   showDivider?: boolean;
 }) {
-  const { data: account } = useSWR('/api/studio/account', readStudioAccount);
+  const { data: authOptions } = useSWR(
+    '/api/studio/auth-options',
+    readStudioAuthOptions
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   async function signInWithGoogle() {
@@ -46,7 +49,7 @@ export function SocialLoginButton({
         type="button"
         className="bb-auth-google"
         onClick={signInWithGoogle}
-        disabled={pending || !account?.auth.google}
+        disabled={pending || !authOptions?.google}
       >
         {pending ? (
           <LoaderCircle size={18} className="bb-spin" />

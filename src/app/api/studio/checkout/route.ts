@@ -39,7 +39,16 @@ export async function POST(request: Request) {
       { error: 'Choose a valid video pack and checkout request ID.' },
       { status: 400 }
     );
-  return Response.json(
-    await createVideoCheckout(user, input.data.packId, input.data.requestId)
-  );
+  try {
+    return Response.json(
+      await createVideoCheckout(user, input.data.packId, input.data.requestId)
+    );
+  } catch (reason) {
+    // 接口边界记录服务端原因并返回 JSON，不向浏览器泄露支付商或数据库细节。
+    console.error('创建 Waffo 收银台失败：', reason);
+    return Response.json(
+      { error: 'Checkout could not start. Please try again.' },
+      { status: 500 }
+    );
+  }
 }

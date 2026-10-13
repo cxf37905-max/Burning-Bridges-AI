@@ -20,7 +20,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { signOutOfStudio } from '@/studio/auth-actions';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { authClient } from '@/lib/auth-client';
+import { creditsKeys } from '@/hooks/use-credits';
+import { StudioCreditBalance } from './studio-credit-balance';
 
 const destinations = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -33,27 +38,39 @@ const destinations = [
 
 interface StudioAccountMenuProps {
   user: {
+    id: string;
     name: string | null;
     email: string;
-    image: string | null;
-    credits: number;
+    image?: string | null;
   };
 }
 
 export function StudioAccountMenu({ user }: StudioAccountMenuProps) {
   const initial = user.email.trim().charAt(0).toUpperCase();
+  const [signingOut, setSigningOut] = useState(false);
+  const queryClient = useQueryClient();
+
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const result = await authClient.signOut();
+      if (result.error) {
+        toast.error('Could not sign out. Please try again.');
+        return;
+      }
+      queryClient.removeQueries({ queryKey: creditsKeys.all });
+      window.location.assign('/');
+    } catch {
+      toast.error('Could not connect. Please try signing out again.');
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   return (
     <div className="bb-account">
-      <Link
-        href="/settings/credits"
-        className="bb-account-credit"
-        aria-label={`${user.credits} credits. View your credits`}
-        title="View your credits"
-      >
-        <Coins size={15} aria-hidden="true" />
-        <span>{user.credits}</span>
-      </Link>
+      <StudioCreditBalance userId={user.id} />
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
@@ -92,17 +109,20 @@ export function StudioAccountMenu({ user }: StudioAccountMenuProps) {
             ))}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <form action={signOutOfStudio}>
-            <DropdownMenuItem
-              asChild
-              onSelect={(event) => event.preventDefault()}
+          <DropdownMenuItem
+            asChild
+            disabled={signingOut}
+            onSelect={(event) => event.preventDefault()}
+          >
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={signingOut}
             >
-              <button type="submit">
-                <LogOut size={16} aria-hidden="true" />
-                Sign out
-              </button>
-            </DropdownMenuItem>
-          </form>
+              <LogOut size={16} aria-hidden="true" />
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

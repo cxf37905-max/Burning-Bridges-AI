@@ -238,6 +238,9 @@ importers:
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.3)
+      media-chrome:
+        specifier: 4.19.3
+        version: 4.19.3(react@19.2.3)
       motion:
         specifier: ^12.4.3
         version: 12.4.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -4192,6 +4195,11 @@ packages:
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
 
+  ce-la-react@0.3.2:
+    resolution: {integrity: sha512-QJ6k4lOD/btI08xG8jBPxRCGXvCnusGGkTsiXk0u3NqUu/W+BXRnFD4PYjwtqh8AWmGa5LDbGk0fLQsqr0nSMA==}
+    peerDependencies:
+      react: '>=17.0.0'
+
   chai@6.3.0:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
     engines: {node: '>=18'}
@@ -5663,6 +5671,9 @@ packages:
 
   mdast-util-to-string@4.0.0:
     resolution: {integrity: sha512-0H44vDimn51F0YwvxSJSm0eCDOJTRlmN0R1yBh4HLj9wiV1Dn0QoXGbvFAWj2hSItVTlCmBF1hqKlIyUBVFLPg==}
+
+  media-chrome@4.19.3:
+    resolution: {integrity: sha512-B5cPfn5FUTm3ki58QlEk2CB3xFo1i5jM1JavVN3bV81o09cokQC+qWVGVWZWY9Yoo6si9WeaQZUNn472WzbNVQ==}
 
   media-typer@1.1.0:
     resolution: {integrity: sha512-aisnrDP4GNe06UcKFnV5bfMNPBUw4jsLGaWwWfnH3v02GnBuXX2MCVn5RbrWo0j3pczUilYblq7fQ7Nw2t5XKw==}
@@ -10625,6 +10636,10 @@ snapshots:
 
   ccount@2.0.1: {}
 
+  ce-la-react@0.3.2(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+
   chai@6.3.0: {}
 
   chalk@4.1.2:
@@ -12248,6 +12263,12 @@ snapshots:
   mdast-util-to-string@4.0.0:
     dependencies:
       '@types/mdast': 4.0.4
+
+  media-chrome@4.19.3(react@19.2.3):
+    dependencies:
+      ce-la-react: 0.3.2(react@19.2.3)
+    transitivePeerDependencies:
+      - react
 
   media-typer@1.1.0: {}
 

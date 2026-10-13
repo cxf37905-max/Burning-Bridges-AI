@@ -39,10 +39,18 @@ export function useVideoCheckout({
         );
         return;
       }
-      const result = await response.json();
+      const payload: unknown = await response.json().catch((reason: unknown) => {
+        if (!(reason instanceof SyntaxError)) throw reason;
+        throw new Error('Checkout could not start. Please try again.');
+      });
+      if (!payload || typeof payload !== 'object')
+        throw new Error('Checkout could not start. Please try again.');
+      const result = payload as { url?: unknown; error?: unknown };
       if (!response.ok || typeof result.url !== 'string')
         throw new Error(
-          result.error || 'Checkout could not start. Please try again.'
+          typeof result.error === 'string'
+            ? result.error
+            : 'Checkout could not start. Please try again.'
         );
       window.location.assign(result.url);
     } catch (reason) {

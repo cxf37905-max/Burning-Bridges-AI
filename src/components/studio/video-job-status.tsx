@@ -1,9 +1,27 @@
 'use client';
 
-import useSWR, { useSWRConfig } from 'swr';
+import useSWR from 'swr';
+import { useQueryClient } from '@tanstack/react-query';
+import { creditsKeys } from '@/hooks/use-credits';
 import { useState } from 'react';
-import { LoaderCircle, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { z } from 'zod';
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
+import { VideoGenerationState } from './video-generation-state';
+
+const StudioVideoPlayer = dynamic(
+  () => import('./studio-video-player').then((module) => module.StudioVideoPlayer),
+  {
+    ssr: false,
+    loading: () => (
+      <Skeleton
+        className="bb-video-player-loading"
+        aria-label="Loading video player"
+      />
+    ),
+  }
+);
 
 const videoJob = z.object({
   id: z.string(),
@@ -26,12 +44,12 @@ async function fetchVideoJob(url: string) {
 
 export function VideoJobStatus({
   id,
-  onNewTake,
+  appearance = 'library',
 }: {
   id: string;
-  onNewTake?: () => void;
+  appearance?: 'studio' | 'library';
 }) {
-  const { mutate: refreshCache } = useSWRConfig();
+  const queryClient = useQueryClient();
   const [downloading, setDownloading] = useState(false);
   const {
     data: job,
@@ -44,8 +62,9 @@ export function VideoJobStatus({
     onErrorRetry: (_error, _key, _config, revalidate, { retryCount }) => {
       setTimeout(() => revalidate({ retryCount }), 8_000);
     },
-    onSuccess: () => {
-      void refreshCache('/api/studio/account');
+    onSuccess: (latest) => {
+      if (latest.status === 'succeeded' || latest.status === 'failed')
+        void queryClient.invalidateQueries({ queryKey: creditsKeys.all });
     },
   });
 
@@ -73,32 +92,19 @@ export function VideoJobStatus({
   }
   return (
     <div className="bb-job-status" aria-live="polite">
-      {error && !job ? (
-        <>
-          <p>Connection interrupted. We’ll keep checking your video.</p>
-          <button
-            type="button"
-            className="bb-text-link"
-            onClick={() => mutate()}
-          >
-            Check again ↗
-          </button>
-        </>
-      ) : !job || ['reserved', 'processing'].includes(job.status) ? (
-        <>
-          <p>
-            <LoaderCircle size={15} className="bb-spin" />{' '}
-            {job?.status === 'reserved'
-              ? 'Starting your video…'
-              : 'Your Burning Bridges AI video is rendering…'}
-          </p>
-          <small>
-            {(error
+      {!job || ['reserved', 'processing'].includes(job.status) ? (
+        <VideoGenerationState
+          starting={job?.status === 'reserved'}
+          studio={appearance === 'studio'}
+          notice={
+            error
               ? 'Connection interrupted. We’ll keep checking your video.'
-              : job?.message) ||
-              'This can take a few minutes. You can close this page and come back later.'}
-          </small>
-        </>
+              : job?.message === 'Creating your Burning Bridges AI video…'
+                ? null
+                : job?.message
+          }
+          onRetry={error ? () => void mutate() : undefined}
+        />
       ) : job.status === 'failed' ? (
         <p role="alert">
           {job.message ||
@@ -111,20 +117,7 @@ export function VideoJobStatus({
       ) : job.videoUrl ? (
         <>
           <p>Your Burning Bridges AI video is ready.</p>
-          <video
-            src={job.videoUrl}
-            controls
-            playsInline
-            preload="metadata"
-            aria-label="Your generated Burning Bridges AI video"
-          >
-            <track
-              kind="captions"
-              src="/studio/party-music.vtt"
-              srcLang="en"
-              label="Sound description"
-            />
-          </video>
+          <StudioVideoPlayer key={job.videoUrl} src={job.videoUrl} />
           <button
             type="button"
             className="bb-text-link"
@@ -139,13 +132,6 @@ export function VideoJobStatus({
           </small>
         </>
       ) : null}
-      {onNewTake && job && (
-        <button type="button" className="bb-text-link" onClick={onNewTake}>
-          {['reserved', 'processing'].includes(job.status)
-            ? 'Keep this video in my library · create another ↗'
-            : 'Make another video ↗'}
-        </button>
-      )}
     </div>
   );
 }

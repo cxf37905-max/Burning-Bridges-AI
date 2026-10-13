@@ -4,7 +4,7 @@ import {
   advanceKlingPipeline,
   createKlingPipeline,
   klingPipelineSchema,
-  refundableSegmentFailures,
+  returnableVideoCreditEvidence,
   type KlingPipeline,
   type KlingPipelineIO,
 } from '../../src/studio/kling-pipeline';
@@ -90,8 +90,8 @@ describe('两段生成、串行重试与本地合成', () => {
     expect(submitted[1].input.image_urls).toEqual(
       submitted[0].input.image_urls
     );
-    expect(submitted[0].input.prompt).toContain(
-      'original video outfit unchanged'
+    expect(submitted[0].input.prompt).toBe(
+      'Replace the main character in @Video1 with the main character in @Image1.'
     );
     expect(compose).toHaveBeenCalledExactlyOnceWith(
       'https://videos.example/segment-1.mp4',
@@ -107,7 +107,7 @@ describe('两段生成、串行重试与本地合成', () => {
       throw failure(endpoint, requestId);
     };
     await advanceKlingPipeline(pipeline, io);
-    expect(refundableSegmentFailures(pipeline)).toHaveLength(2);
+    expect(returnableVideoCreditEvidence(pipeline)).toHaveLength(2);
     expect(pipeline.failureReason).toBeTruthy();
     await advanceKlingPipeline(pipeline, io);
     expect(submitted).toHaveLength(2);
@@ -128,7 +128,7 @@ describe('两段生成、串行重试与本地合成', () => {
     await advanceKlingPipeline(pipeline, io);
     expect(submitted).toHaveLength(3);
     expect(submitted[2].stepId).toBe(`segment-${failedIndex + 1}`);
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     await advanceKlingPipeline(pipeline, io);
     await advanceKlingPipeline(pipeline, io);
     expect(compose).toHaveBeenCalledTimes(1);
@@ -158,13 +158,13 @@ describe('两段生成、串行重试与本地合成', () => {
       await advanceKlingPipeline(pipeline, io);
     expect(submitted).toHaveLength(3);
     expect(pipeline.steps[1].requestId).toBe(firstRetryId);
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     reportFailure = true;
     await advanceKlingPipeline(pipeline, io);
     expect(submitted).toHaveLength(4);
     expect(pipeline.steps[1].requestId).not.toBe(firstRetryId);
     await advanceKlingPipeline(pipeline, io);
-    expect(refundableSegmentFailures(pipeline)).toHaveLength(3);
+    expect(returnableVideoCreditEvidence(pipeline)).toHaveLength(3);
     expect(
       new Set(pipeline.steps[1].failures.map((entry) => entry.requestId)).size
     ).toBe(3);
@@ -187,7 +187,7 @@ describe('两段生成、串行重试与本地合成', () => {
     for (let tick = 0; tick < 5; tick++)
       await advanceKlingPipeline(pipeline, io);
     expect(submitted).toHaveLength(2);
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     expect(pipeline.steps[0].failures).toHaveLength(1);
   });
 
@@ -209,7 +209,7 @@ describe('两段生成、串行重试与本地合成', () => {
     expect(io.submit).toHaveBeenCalledTimes(1);
     expect(pipeline.steps[0].state).toBe('done');
     expect(pipeline.steps[1].state).toBe('unknown');
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     expect(submitted).toHaveLength(2);
   });
 
@@ -221,7 +221,7 @@ describe('两段生成、串行重试与本地合成', () => {
     await advanceKlingPipeline(pipeline, io);
     expect(pipeline.compositionError).toBe(true);
     expect(pipeline.videoUrl).toBeUndefined();
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     await advanceKlingPipeline(pipeline, io);
     expect(pipeline.compositionError).toBe(false);
     expect(pipeline.videoUrl).toBeTruthy();
@@ -270,7 +270,7 @@ describe('两段生成、串行重试与本地合成', () => {
       requestId,
       failures: [],
     });
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     expect(submitted).toHaveLength(2);
   });
 
@@ -283,7 +283,7 @@ describe('两段生成、串行重试与本地合成', () => {
     await expect(advanceKlingPipeline(pipeline, io)).rejects.toThrow(
       'does not match'
     );
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     expect(submitted).toHaveLength(2);
   });
 
@@ -293,7 +293,7 @@ describe('两段生成、串行重试与本地合成', () => {
     outputs.set(pipeline.steps[0].requestId!, {});
     await expect(advanceKlingPipeline(pipeline, io)).rejects.toThrow();
     expect(pipeline.steps[0].state).toBe('queued');
-    expect(refundableSegmentFailures(pipeline)).toBeNull();
+    expect(returnableVideoCreditEvidence(pipeline)).toBeNull();
     expect(submitted).toHaveLength(2);
   });
 

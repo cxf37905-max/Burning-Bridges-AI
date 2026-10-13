@@ -6,6 +6,8 @@ const draftSchema = z.object({
   consent: z.boolean(),
   requestId: z.string().uuid(),
   savedAt: z.number(),
+  userId: z.string().optional(),
+  jobId: z.string().regex(/^[a-f0-9]{32}$/).optional(),
 });
 export type PhotoDraft = z.infer<typeof draftSchema>;
 

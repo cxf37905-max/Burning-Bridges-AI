@@ -17,6 +17,7 @@ const nextConfig: NextConfig = {
       // pnpm 顶层依赖是符号链接，部署资源必须从实际包目录收集。
       './node_modules/.pnpm/ffmpeg-static@*/node_modules/ffmpeg-static/ffmpeg*',
       './public/studio/reference/*-ref-audio.m4a',
+      './public/studio/reference/*-ref-2-overlap.mp4',
     ],
   },
 

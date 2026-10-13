@@ -25,16 +25,31 @@ export const falFailureSchema = z
   .object({
     endpoint: z.enum(falEndpoints),
     requestId: z.string().uuid(),
-    source: z.literal('queue-status'),
-    status: z.literal('COMPLETED'),
+    source: z.enum(['queue-status', 'webhook']),
+    status: z.enum(['COMPLETED', 'ERROR']),
     error: z.string().optional(),
     errorType: z.string().optional(),
   })
   .refine(
-    (failure) => Boolean(failure.error?.trim() || failure.errorType?.trim()),
-    'A completed fal task must explicitly report an error before a refund.'
+    (failure) => Boolean(failure.error?.trim() || failure.errorType?.trim()) &&
+      ((failure.source === 'queue-status' && failure.status === 'COMPLETED') ||
+       (failure.source === 'webhook' && failure.status === 'ERROR')),
+    'Returning credits through this path requires matching final fal error evidence.'
   );
 export type FalFailure = z.infer<typeof falFailureSchema>;
+
+// 只接受能确定发生在HTTP请求发送之前的连接错误，不包含普通超时或连接重置。
+export const falUnsentSubmissionSchema = z.object({
+  endpoint: z.enum(falEndpoints),
+  source: z.literal('transport-before-send'),
+  attempts: z.array(z.object({
+    codes: z.array(z.enum([
+      'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'UND_ERR_CONNECT_TIMEOUT',
+    ])).min(1),
+    observedAt: z.iso.datetime(),
+  })).length(3),
+});
+export type FalUnsentSubmission = z.infer<typeof falUnsentSubmissionSchema>;
 
 export function falQueuePath(endpoint: FalEndpoint, requestId: string) {
   z.enum(falEndpoints).parse(endpoint);

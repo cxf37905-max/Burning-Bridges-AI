@@ -36,12 +36,19 @@ export async function createVideoCheckout(
     throw new Error(`此支付请求已处理，请重新选择套餐：${id}`);
   const origin = new URL(process.env.NEXT_PUBLIC_BASE_URL || studioBrand.url)
     .origin;
+  const returnBaseUrl =
+    process.env.WAFFO_DEBUG === 'true'
+      ? process.env.WAFFO_RETURN_BASE_URL
+      : undefined;
+  const successUrl = returnBaseUrl
+    ? new URL('/api/studio/checkout/return', returnBaseUrl).toString()
+    : `${origin}/?checkout=returned#studio`;
   // 付款、验签、查单和积分入账全部交给模板的支付接口。
   const result = await createCreditCheckout({
     packageId: creditPack.id,
     priceId: creditPack.price.priceId,
     customerEmail: user.email,
-    successUrl: `${origin}/?checkout=returned#studio`,
+    successUrl,
     cancelUrl: `${origin}/pricing?checkout=cancelled`,
     locale: 'en',
     metadata: { userId: user.id, paymentSyncId: id },

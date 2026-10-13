@@ -23,11 +23,18 @@ const dependencies = vi.hoisted(() => ({
   submit: vi.fn(),
   read: vi.fn(),
   photo: vi.fn(),
+  reference: vi.fn(),
   compose: vi.fn(),
 }));
 vi.mock('../../src/db', () => ({ getDb: dependencies.getDb }));
 vi.mock('../../src/studio/photo-storage', () => ({
   storeStudioPhoto: dependencies.photo,
+}));
+vi.mock('../../src/studio/reference-storage', () => ({
+  storeStudioReference: dependencies.reference,
+}));
+vi.mock('../../src/studio/fal-webhook-url', () => ({
+  createFalWebhookUrl: () => 'https://callbacks.example/api/webhooks/fal',
 }));
 vi.mock('../../src/studio/video-storage', () => ({
   composeStudioVideo: dependencies.compose,
@@ -73,6 +80,10 @@ beforeEach(async () => {
   vi.clearAllMocks();
   dependencies.getDb.mockResolvedValue(db);
   dependencies.photo.mockResolvedValue('https://photos.example/alice.jpg');
+  dependencies.reference.mockResolvedValue({
+    secondReferenceUrl: 'https://references.example/overlap.mp4',
+    overlapFrames: 24,
+  });
   dependencies.submit.mockImplementation(async () => randomUUID());
   dependencies.read.mockResolvedValue({ ready: false });
   dependencies.compose.mockResolvedValue(

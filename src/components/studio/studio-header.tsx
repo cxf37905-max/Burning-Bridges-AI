@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ArrowUpRight, AudioLines } from 'lucide-react';
 import { StudioAccount } from './studio-account';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StudioSectionLink } from './studio-section-link';
 import { getStudioAvailability } from '@/studio/availability';
 
@@ -28,13 +29,7 @@ export function StudioHeader() {
           <StudioSectionLink href="/#pricing">Pricing</StudioSectionLink>
         </nav>
         <div className="bb-nav-actions">
-          <Suspense
-            fallback={
-              <Link className="bb-signin" href="/auth/login">
-                Sign in
-              </Link>
-            }
-          >
+          <Suspense fallback={<Skeleton className="size-8 rounded-full" />}>
             <StudioAccount authReady={getStudioAvailability().authReady} />
           </Suspense>
           <StudioSectionLink className="bb-button bb-button-small" href="/#studio">

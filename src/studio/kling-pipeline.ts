@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import {
   falFailureSchema,
+  falUnsentSubmissionSchema,
   falVideoResult,
   mediaUrl,
   type FalEndpoint,
   type FalFailure,
+  type FalUnsentSubmission,
 } from './fal-contract';
 import { getKlingTemplate, klingScenes } from './kling-templates';
 
@@ -14,6 +16,8 @@ const stepSchema = z.object({
   id: z.enum(stepIds),
   state: z.enum(['idle', 'submitting', 'queued', 'done', 'unknown', 'failed']),
   requestId: z.string().uuid().optional(),
+  submissionId: z.uuid().optional(),
+  notSubmitted: falUnsentSubmissionSchema.optional(),
   output: z.unknown().optional(),
   failures: z.array(falFailureSchema).max(3).default([]),
 });
@@ -27,6 +31,13 @@ const pipelineFields = {
   falFailure: falFailureSchema.optional(),
   compositionError: z.boolean().default(false),
   compositionFailure: z.string().optional(),
+  // 旧任务没有此字段，不能对其直接删除一秒。
+  seam: z
+    .object({
+      secondReferenceUrl: mediaUrl,
+      overlapFrames: z.literal(24),
+    })
+    .optional(),
 };
 const currentPipelineSchema = z.object({
   ...pipelineFields,
@@ -79,20 +90,29 @@ export interface KlingPipelineIO {
   persist: (pipeline: KlingPipeline) => Promise<void>;
   submit: (
     endpoint: FalEndpoint,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    webhookUrl?: string
   ) => Promise<string>;
   read: (
     endpoint: FalEndpoint,
     requestId: string
   ) => Promise<{ ready: false } | { ready: true; output: unknown }>;
   getTaskFailure: (reason: unknown) => FalFailure | null;
-  compose: (first: string, second: string, sceneId: string) => Promise<string>;
+  getUnsentSubmission?: (reason: unknown) => FalUnsentSubmission | null;
+  webhookUrl?: (stepId: 'segment-1' | 'segment-2', submissionId: string) => string;
+  compose: (
+    first: string,
+    second: string,
+    sceneId: string,
+    overlapFrames?: number
+  ) => Promise<string>;
 }
 
 export function createKlingPipeline(
   photoUrl: string,
   sceneId: string,
-  tier = 'standard'
+  tier = 'standard',
+  seam?: KlingPipeline['seam']
 ) {
   getKlingTemplate(sceneId);
   return klingPipelineSchema.parse({
@@ -100,6 +120,7 @@ export function createKlingPipeline(
     photoUrl,
     sceneId,
     tier,
+    seam,
     steps: stepIds.map((id) => ({ id, state: 'idle' })),
   });
 }
@@ -119,8 +140,11 @@ export function klingStepRequest(pipeline: KlingPipeline, id: StepId) {
       `fal-ai/kling-video/o3/${pipeline.tier}/video-to-video/edit` as FalEndpoint,
     input: {
       prompt:
-        'In @Video1 replace only the main foreground performer with the person in @Image1. Preserve the reference photo facial identity, hairstyle and body proportions. Keep the original video outfit unchanged, including its exact colors and accessories. Preserve all original actions, expressions, timing, camera movement, lighting, background and other people. Maintain the same person throughout. Do not add text, cuts, new motion or new objects.',
-      video_url: template.segments[id === 'segment-1' ? 0 : 1].url,
+        'Replace the main character in @Video1 with the main character in @Image1.',
+      video_url:
+        id === 'segment-2' && pipeline.seam
+          ? pipeline.seam.secondReferenceUrl
+          : template.segments[id === 'segment-1' ? 0 : 1].url,
       image_urls: [pipeline.photoUrl],
       keep_audio: false,
     },
@@ -139,9 +163,22 @@ function confirmedFailure(pipeline: KlingPipeline, step: SegmentStep) {
     : null;
 }
 
-export function refundableSegmentFailures(
+export function returnableVideoCreditEvidence(
   pipeline: KlingPipeline
-): FalFailure[] | null {
+): (FalFailure | FalUnsentSubmission)[] | null {
+  const segments = pipeline.steps.slice(0, 2);
+  const unsent = (step: SegmentStep) => {
+    const request = klingStepRequest(pipeline, step.id);
+    return step.state === 'failed' && !step.requestId &&
+      step.notSubmitted && step.notSubmitted.endpoint === request?.endpoint
+      ? falUnsentSubmissionSchema.parse(step.notSubmitted) : null;
+  };
+  const unsentProof = segments.map(unsent).find((proof) => proof !== null);
+  if (unsentProof && segments.every((step) =>
+    Boolean(unsent(step)) || Boolean(confirmedFailure(pipeline, step)) ||
+    (step.state === 'done' && falVideoResult.safeParse(step.output).success) ||
+    (step.state === 'idle' && !step.requestId && !step.submissionId && !step.failures.length)
+  )) return [unsentProof];
   const first = confirmedFailure(pipeline, pipeline.steps[0]);
   const second = confirmedFailure(pipeline, pipeline.steps[1]);
   if (first && second) return [first, second];
@@ -172,6 +209,10 @@ async function submitSegment(
   io: KlingPipelineIO
 ) {
   const request = klingStepRequest(pipeline, step.id)!;
+  const submissionId = crypto.randomUUID();
+  const webhookUrl = io.webhookUrl?.(step.id as 'segment-1' | 'segment-2', submissionId);
+  if (webhookUrl) step.submissionId = submissionId;
+  delete step.notSubmitted;
   step.state = 'submitting';
   // 先落库再调用付费接口；中断后绝不自动再次提交。
   await io.persist(pipeline);
@@ -179,10 +220,22 @@ async function submitSegment(
     step.requestId = z
       .string()
       .uuid()
-      .parse(await io.submit(request.endpoint, request.input));
+      .parse(await (webhookUrl
+        ? io.submit(request.endpoint, request.input, webhookUrl)
+        : io.submit(request.endpoint, request.input)));
     step.state = 'queued';
-  } catch {
-    step.state = 'unknown';
+  } catch (reason) {
+    const proof = io.getUnsentSubmission?.(reason);
+    if (proof) {
+      step.notSubmitted = falUnsentSubmissionSchema.parse(proof);
+      if (proof.endpoint !== request.endpoint)
+        throw new Error('Unsent submission evidence does not match the model endpoint.');
+      step.state = 'failed';
+      if (returnableVideoCreditEvidence(pipeline))
+        pipeline.failureReason = 'This video could not be generated.';
+    } else {
+      step.state = 'unknown';
+    }
     await io.persist(pipeline);
     return false;
   }
@@ -256,7 +309,14 @@ async function composeCompletedSegments(
   let videoUrl: string;
   try {
     videoUrl = mediaUrl.parse(
-      await io.compose(first, second, pipeline.sceneId)
+      await (pipeline.seam
+        ? io.compose(
+            first,
+            second,
+            pipeline.sceneId,
+            pipeline.seam.overlapFrames
+          )
+        : io.compose(first, second, pipeline.sceneId))
     );
   } catch (reason) {
     // 本地合成可安全重做；保留两段成功结果，下次调度仅重试合成。
@@ -301,7 +361,7 @@ export async function advanceKlingPipeline(
       await querySegment(pipeline, step, io);
     }
   }
-  if (refundableSegmentFailures(pipeline)) {
+  if (returnableVideoCreditEvidence(pipeline)) {
     pipeline.failureReason = 'This video could not be generated.';
     await io.persist(pipeline);
     return pipeline;
@@ -319,7 +379,7 @@ export function klingProgressMessage(pipeline: KlingPipeline) {
     pipeline.steps.some((step) => step.state === 'unknown') ||
     pipeline.steps.slice(0, 2).some((step) => step.state === 'submitting')
   )
-    return 'We could not confirm this submission. Your credits have not been returned. Please contact support before starting it again.';
+    return 'Submission confirmation is delayed. We are waiting for the generation service. Your credits have not been returned.';
   if (
     pipeline.steps
       .slice(2)
@@ -329,7 +389,7 @@ export function klingProgressMessage(pipeline: KlingPipeline) {
   if (pipeline.compositionError)
     return 'Your video parts are ready. We are retrying the final assembly automatically.';
   if (pipeline.steps.slice(0, 2).every((step) => step.state === 'done'))
-    return 'Putting your video together and adding the original song…';
+    return 'Creating your Burning Bridges AI video…';
   if (pipeline.steps.slice(0, 2).some((step) => step.failures.length > 0))
     return pipeline.steps.slice(0, 2).some((step) => step.state === 'done')
       ? 'We are keeping your completed part and retrying only the failed part.'
