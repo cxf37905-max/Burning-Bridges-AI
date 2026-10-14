@@ -188,7 +188,7 @@ export interface StorageConfig {
  * Payment configuration
  */
 export interface PaymentConfig {
-  provider: 'stripe' | 'creem' | 'paypal' | 'waffo'; // 支付服务商
+  provider: 'stripe' | 'creem' | 'paypal' | 'waffo' | 'dodo'; // 支付服务商
 }
 
 /**

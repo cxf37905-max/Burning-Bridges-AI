@@ -1,3 +1,4 @@
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { ArrowUpRight, Clapperboard, Download, ImagePlus } from 'lucide-react';
 
 const steps = [
@@ -44,9 +45,9 @@ export function VideoHowTo() {
           ))}
         </div>
         <div className="bb-section-action">
-          <a className="bb-button" href="#create">
+          <Link className="bb-button" href="#create">
             Create my Burning Bridges video <ArrowUpRight size={16} />
-          </a>
+          </Link>
         </div>
       </div>
     </section>

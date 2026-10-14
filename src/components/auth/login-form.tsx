@@ -12,6 +12,7 @@ import { authClient } from '@/lib/auth-client';
 import { authCallbackUrl, authRedirect } from '@/lib/auth-redirect';
 import { readStudioAuthOptions } from '@/studio/auth-options-query';
 import { Input } from '@/components/ui/input';
+import { RouteLink } from '@/components/layout/locale-link';
 import { AuthCard } from './auth-card';
 import { SocialLoginButton } from './social-login-button';
 
@@ -160,9 +161,9 @@ export function LoginForm({
             {form.formState.errors.password.message}
           </p>
         )}
-        <a href="/auth/forgot-password" className="bb-auth-forgot">
+        <RouteLink href="/auth/forgot-password" className="bb-auth-forgot">
           Forgot password?
-        </a>
+        </RouteLink>
         {error && (
           <p className="bb-form-error" role="alert">
             {error}

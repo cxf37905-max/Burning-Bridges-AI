@@ -4,7 +4,14 @@ import { routing } from './i18n/routing';
 
 const intlMiddleware = createMiddleware(routing);
 export const config = {
-  matcher: ['/((?!_next|_vercel|.*\\..*).*)'],
+  matcher: [
+    '/((?!_next|_vercel|.*\\..*).*)',
+    // 文档路径中的点号不能绕过项目页面白名单。
+    '/docs/:path*',
+    '/:locale/docs/:path*',
+    '/docs.mdx',
+    '/:locale/docs.mdx',
+  ],
 };
 const publicPages = new Set([
   '/',
@@ -27,12 +34,12 @@ const publicPages = new Set([
 
 export default function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  // 开放产品、认证和模板 Waffo 回调；其他支付商与示例 API 保持关闭。
+  // 各支付商的独立回调保留验签入口，切换后仍可处理旧订单迟到事件。
   if (pathname.startsWith('/api/')) {
     if (
       pathname.startsWith('/api/studio/') ||
       pathname.startsWith('/api/auth/') ||
-      pathname === '/api/webhooks/waffo' ||
+      /^\/api\/webhooks\/(stripe|creem|paypal|waffo|dodo)$/.test(pathname) ||
       pathname === '/api/webhooks/fal' ||
       pathname === '/api/storage/upload'
     )
@@ -43,8 +50,11 @@ export default function proxy(request: NextRequest) {
     );
   }
   const pagePath = pathname.replace(/^\/en(?=\/|$)/, '') || '/';
-  if (!publicPages.has(pagePath) && !/^\/guides\/[a-z0-9-]+\/?$/.test(pagePath))
-    return new NextResponse('Page not found.', { status: 404 });
+  if (!publicPages.has(pagePath))
+    return new NextResponse('Page not found.', {
+      status: 404,
+      headers: { 'X-Robots-Tag': 'noindex' },
+    });
   // 页面、Server Action 与 Route Handler 使用同一服务端 Session 鉴权。
   return intlMiddleware(request);
 }

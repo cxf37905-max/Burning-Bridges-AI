@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { Suspense } from 'react';
 import { ArrowUpRight, AudioLines } from 'lucide-react';
 import { StudioAccount } from './studio-account';
@@ -8,7 +8,7 @@ import { getStudioAvailability } from '@/studio/availability';
 
 export function StudioHeader() {
   return (
-    <header className="bb-header">
+    <header className="bb-header route-transition-header">
       <div className="bb-shell bb-nav">
         <Link
           href="/"

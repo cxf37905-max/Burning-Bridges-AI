@@ -456,6 +456,105 @@ div[class*="border-t"][class*="bg-fd-secondary"]:not(:has(*)):not(
   }
 }
 
+/* 只在真实导航时启用浏览器快照动画；初始 HTML 与首屏内容不受影响。 */
+:root {
+  --route-transition-duration: 450ms;
+}
+
+html[data-route-transition] .route-transition-header {
+  view-transition-name: route-header;
+}
+
+html[data-route-transition] [data-slot="sidebar-container"],
+html[data-route-transition] #nd-sidebar {
+  view-transition-name: route-sidebar;
+}
+
+html[data-route-transition] #nd-subnav {
+  view-transition-name: route-docs-header;
+}
+
+html[data-route-transition]::view-transition-group(*) {
+  animation-duration: var(--route-transition-duration);
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-route-transition]::view-transition-old(root),
+html[data-route-transition]::view-transition-new(root) {
+  mix-blend-mode: normal;
+  animation-duration: var(--route-transition-duration);
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+html[data-route-transition="forward"]::view-transition-old(root) {
+  animation-name: route-exit-up;
+}
+
+html[data-route-transition="forward"]::view-transition-new(root) {
+  animation-name: route-enter-up;
+}
+
+html[data-route-transition="back"]::view-transition-old(root) {
+  animation-name: route-exit-down;
+}
+
+html[data-route-transition="back"]::view-transition-new(root) {
+  animation-name: route-enter-down;
+}
+
+html[data-route-transition]::view-transition-group(route-header),
+html[data-route-transition]::view-transition-group(route-sidebar),
+html[data-route-transition]::view-transition-group(route-docs-header) {
+  animation: none;
+  z-index: 1;
+}
+
+html[data-route-transition]::view-transition-old(route-header),
+html[data-route-transition]::view-transition-old(route-sidebar),
+html[data-route-transition]::view-transition-old(route-docs-header) {
+  animation: none;
+  display: none;
+}
+
+html[data-route-transition]::view-transition-new(route-header),
+html[data-route-transition]::view-transition-new(route-sidebar),
+html[data-route-transition]::view-transition-new(route-docs-header) {
+  animation: none;
+}
+
+@keyframes route-exit-up {
+  to {
+    transform: translateY(-100dvh);
+  }
+}
+
+@keyframes route-enter-up {
+  from {
+    transform: translateY(100dvh);
+  }
+}
+
+@keyframes route-exit-down {
+  to {
+    transform: translateY(100dvh);
+  }
+}
+
+@keyframes route-enter-down {
+  from {
+    transform: translateY(-100dvh);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-route-transition]::view-transition-group(*),
+  html[data-route-transition]::view-transition-old(*),
+  html[data-route-transition]::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* ── Scrollbar styling ── */
 html {
   scrollbar-width: thin;

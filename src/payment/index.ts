@@ -1,5 +1,6 @@
 import { websiteConfig } from '@/config/website';
 import { CreemProvider } from './provider/creem';
+import { DodoProvider } from './provider/dodo';
 import { PaypalProvider } from './provider/paypal';
 import { StripeProvider } from './provider/stripe';
 import { WaffoProvider } from './provider/waffo';
@@ -22,6 +23,7 @@ const providerRegistry: Partial<
   creem: () => new CreemProvider(),
   paypal: () => new PaypalProvider(),
   waffo: () => new WaffoProvider(),
+  dodo: () => new DodoProvider(),
 };
 
 let paymentProvider: PaymentProvider | null = null;

@@ -48,7 +48,9 @@ export async function recordFalWebhook(
   }
   try {
     const pipeline = klingPipelineSchema.parse(video.klingPipeline);
-    const step = pipeline.steps.find((entry) => entry.id === context.stepId)!;
+    const step = pipeline.steps.find((entry) => entry.id === context.stepId);
+    if (!step)
+      throw new FalWebhookError('Generation callback step does not belong to this task.', 409);
     // 旧重试的迟到回调不能覆盖新的提交；终态回调幂等确认。
     if (
       pipeline.failureReason || pipeline.videoUrl ||

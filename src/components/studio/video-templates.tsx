@@ -1,3 +1,4 @@
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import Image from 'next/image';
 import { ArrowUpRight } from 'lucide-react';
 import { partyScenes } from '@/studio/catalog';
@@ -47,9 +48,9 @@ export function VideoTemplates() {
         ))}
       </div>
       <div className="bb-section-action">
-        <a className="bb-button" href="#create">
+        <Link className="bb-button" href="#create">
           Try a template <ArrowUpRight size={16} />
-        </a>
+        </Link>
       </div>
     </section>
   );

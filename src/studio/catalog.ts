@@ -61,7 +61,7 @@ export const partyScenes = [
     subtitle: 'Warm lights. Main-character energy.',
     poster: '/studio/reference/burning-bridges-ai-video.jpg',
     posterPosition: 'center 30%',
-    video: '/studio/reference/burning-bridges-ai-video.mp4',
+    video: '/studio/reference/burning-bridges-ai-video-15s.mp4',
   },
   {
     id: 'after-hours',
@@ -69,7 +69,7 @@ export const partyScenes = [
     subtitle: 'A softer light. A late-night mood.',
     poster: '/studio/reference/burning-bridges-after-party.jpg',
     posterPosition: '72% center',
-    video: '/studio/reference/burning-bridges-after-party.mp4',
+    video: '/studio/reference/burning-bridges-after-party-15s.mp4',
   },
 ] as const;
 export type PartySceneId = (typeof partyScenes)[number]['id'];
@@ -123,7 +123,7 @@ export const studioFaqs = [
   {
     question: 'How long is the Burning Bridges AI video?',
     answer:
-      'The current Burning Bridges video shown in the generator is 20 seconds long.',
+      'The current Burning Bridges video shown in the generator is 15 seconds long.',
   },
   {
     question: 'Is Burning Bridges AI free?',

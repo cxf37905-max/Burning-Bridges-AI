@@ -43,7 +43,7 @@ export function VideoPricing({
         </div>
       )}
       <p className="bb-pricing-credit-cost">
-        {videoCreditCost} credits per 20-second HD 720p video.
+        {videoCreditCost} credits per 15-second HD 720p video.
       </p>
       <div className="bb-price-grid">
         {videoPacks.map((pack) => (

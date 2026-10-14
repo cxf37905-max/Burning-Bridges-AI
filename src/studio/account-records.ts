@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { getUserCredits } from '@/credits/credits';
 import { getDb } from '@/db';
 import { payment, studioVideo, creditTransaction } from '@/db/schema';
-import { findPaymentPriceKey } from '@/config/website';
+import { findPaymentPriceKey, paymentProviderLabels } from '@/config/website';
 import { PaymentScenes } from '@/payment/types';
 import { videoPacks } from './catalog';
 import { getStudioUser } from './auth';
@@ -61,10 +61,12 @@ export async function readStudioAccountRecords() {
       .limit(100),
   ]);
   const orders = payments.map((record) => {
-    const key = findPaymentPriceKey(record.priceId)?.key;
+    const configuredPrice = findPaymentPriceKey(record.priceId);
+    const key = configuredPrice?.key;
     const packageId = key?.replace(/^credits/, '').toLowerCase();
     const pack = videoPacks.find((item) => item.creditPackageId === packageId);
-    if (!pack) throw new Error(`账单对应的视频套餐不存在：${record.priceId}`);
+    if (!pack || !configuredPrice)
+      throw new Error(`账单对应的视频套餐不存在：${record.priceId}`);
     let status = 'pending';
     if (record.paid) status = 'paid';
     else if (record.status === 'canceled' && record.invoiceId)
@@ -75,6 +77,7 @@ export async function readStudioAccountRecords() {
       status = 'closed';
     return {
       id: record.id,
+      providerLabel: paymentProviderLabels[configuredPrice.provider],
       packId: pack.id,
       videos: pack.videos,
       cents: pack.cents,

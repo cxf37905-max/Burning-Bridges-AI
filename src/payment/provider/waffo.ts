@@ -5,11 +5,12 @@ import {
   addCredits,
   addLifetimeMonthlyCredits,
   addSubscriptionCredits,
+  settlePaymentRefund,
 } from '@/credits/credits';
 import { getCreditPackageById } from '@/credits/server';
 import { CREDIT_TRANSACTION_TYPE } from '@/credits/types';
 import { getDb } from '@/db';
-import { creditTransaction, payment, userCredit } from '@/db/schema';
+import { payment } from '@/db/schema';
 import { findConfiguredPriceById, findPlanByPlanId } from '@/lib/price-plan';
 import { sendPaymentNotification } from '@/notification';
 import { WaffoPancake, verifyWebhook } from '@waffo/pancake-ts';
@@ -421,6 +422,7 @@ export class WaffoProvider implements PaymentProvider {
       throw new Error('Waffo 回调缺少业务事件 ID 或订单 ID');
     }
     const connection = await getDb();
+    const refundedSubscriptions = new Map<PaymentRecord, WaffoOrder>();
     const notification = await connection.transaction(async (db) => {
       // 同一订单的付款、取消和退款串行处理，避免退款与发积分交叉执行。
       await db.execute(
@@ -474,7 +476,13 @@ export class WaffoProvider implements PaymentProvider {
           original.subscriptionProduct?.id !== record.priceId
         )
           throw new Error(`Waffo 原订阅与用户或产品不符：${original.id}`);
-        await this.settleOrder(db, record, original, event);
+        await this.settleOrder(
+          db,
+          record,
+          original,
+          event,
+          refundedSubscriptions
+        );
         return;
       }
       const productId =
@@ -490,14 +498,21 @@ export class WaffoProvider implements PaymentProvider {
         event
       );
       if (event.eventType === 'refund.succeeded') {
-        await this.settleRefund(db, currentRecord, order, event);
+        await this.settleRefund(
+          db,
+          currentRecord,
+          order,
+          event,
+          refundedSubscriptions
+        );
         return;
       }
       const shouldNotify = await this.settleOrder(
         db,
         currentRecord,
         order,
-        event
+        event,
+        refundedSubscriptions
       );
       return shouldNotify
         ? {
@@ -506,8 +521,64 @@ export class WaffoProvider implements PaymentProvider {
           }
         : undefined;
     });
+    // 积分先提交，再取消平台续费；取消失败向上抛出，重试不能被积分防重挡住。
+    for (const [record, order] of refundedSubscriptions) {
+      await this.cancelRefundedSubscription(record, order);
+    }
     if (notification)
       await this.notify(notification.record, event, notification.amount);
+  }
+
+  private async cancelRefundedSubscription(
+    record: PaymentRecord,
+    order: WaffoOrder
+  ): Promise<void> {
+    if (['pending', 'active', 'past_due'].includes(order.status)) {
+      const result = z
+        .object({
+          orderId: z.string(),
+          status: z.enum(['canceling', 'canceled']),
+        })
+        .parse(
+          await this.client.orders.cancelSubscription({ orderId: order.id })
+        );
+      if (result.orderId !== order.id) {
+        throw new Error(
+          `Waffo 取消订阅返回订单不符：${result.orderId}/${order.id}`
+        );
+      }
+      order.status = result.status;
+    } else if (
+      !['canceling', 'canceled', 'closed', 'expired'].includes(order.status)
+    ) {
+      throw new Error(
+        `Waffo 退款后无法确认订阅停止续费：${order.id}/${order.status}`
+      );
+    }
+    const ended = ['canceled', 'closed', 'expired'].includes(order.status);
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${record.userId}, 0))`
+      );
+      const [current] = await tx
+        .select()
+        .from(payment)
+        .where(eq(payment.id, record.id))
+        .limit(1);
+      if (!current)
+        throw new Error(`Waffo 取消续费后找不到付款记录：${record.id}`);
+      await tx
+        .update(payment)
+        .set({
+          // 不覆盖已由全额退款或终止回调撤销的权益。
+          cancelAtPeriodEnd:
+            order.status === 'canceling' && current.status !== 'canceled',
+          ...(ended ? { status: 'canceled' as const, paid: false } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(payment.id, record.id));
+    });
   }
 
   private async readOrder(orderId: string, type: string): Promise<WaffoOrder> {
@@ -603,7 +674,8 @@ export class WaffoProvider implements PaymentProvider {
     db: PaymentTransaction,
     record: PaymentRecord,
     order: WaffoOrder,
-    event: WaffoEvent
+    event: WaffoEvent,
+    refundedSubscriptions: Map<PaymentRecord, WaffoOrder>
   ): Promise<boolean> {
     const receipt = latestSuccessfulPayment(order);
     const subscription = record.type === PaymentTypes.SUBSCRIPTION;
@@ -689,17 +761,23 @@ export class WaffoProvider implements PaymentProvider {
       for (const refund of receipt.refunds.filter(
         (item) => item.status === 'succeeded'
       )) {
-        await this.settleRefund(db, record, order, {
-          ...event,
-          eventType: 'refund.succeeded',
-          eventId: refund.id,
-          timestamp: refund.createdAt,
-          data: {
-            ...event.data,
-            paymentId: receipt.id,
-            refundStatus: 'succeeded',
+        await this.settleRefund(
+          db,
+          record,
+          order,
+          {
+            ...event,
+            eventType: 'refund.succeeded',
+            eventId: refund.id,
+            timestamp: refund.createdAt,
+            data: {
+              ...event.data,
+              paymentId: receipt.id,
+              refundStatus: 'succeeded',
+            },
           },
-        });
+          refundedSubscriptions
+        );
       }
     }
     const statusMap: Record<string, PaymentStatus> = {
@@ -752,7 +830,8 @@ export class WaffoProvider implements PaymentProvider {
     tx: PaymentTransaction,
     record: PaymentRecord,
     order: WaffoOrder,
-    event: WaffoEvent
+    event: WaffoEvent,
+    refundedSubscriptions: Map<PaymentRecord, WaffoOrder>
   ): Promise<void> {
     const paymentId = event.data.paymentId;
     if (!paymentId || event.data.refundStatus !== 'succeeded') {
@@ -800,91 +879,21 @@ export class WaffoProvider implements PaymentProvider {
           sum + minorAmount(item.pspAmountDetails.amount, event.data.currency)
         );
       }, 0);
-    const fullRefund = totalRefunded >= original;
-    const latest = latestSuccessfulPayment(order);
-    const affectsAccess =
-      fullRefund &&
-      (record.type === PaymentTypes.ONE_TIME || latest?.id === paymentId);
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${record.userId}, 0))`
-    );
-    const refundKey = `refund:waffo:${event.eventId}`;
-    const duplicates = await tx
-      .select({ id: creditTransaction.id })
-      .from(creditTransaction)
-      .where(eq(creditTransaction.idempotencyKey, refundKey))
-      .limit(1);
-    if (duplicates.length) return;
-    const creditPaymentId = paymentId;
-    const grants = await tx
-      .select()
-      .from(creditTransaction)
-      .where(
-        and(
-          eq(creditTransaction.userId, record.userId),
-          eq(creditTransaction.paymentId, creditPaymentId),
-          sql`${creditTransaction.amount} > 0`
-        )
-      );
-    // 部分退款先于发货时不落零金额防重标记，后续付款回调会按平台退款记录结算。
-    if (!fullRefund && !grants.length && !record.webhookProcessedAt) return;
-    let reclaimed = 0;
-    for (const grant of grants) {
-      const remaining = grant.remainingAmount ?? 0;
-      const deduction = Math.min(
-        remaining,
-        fullRefund
-          ? remaining
-          : Math.floor((grant.amount * refunded) / original)
-      );
-      if (!deduction) continue;
-      await tx
-        .update(creditTransaction)
-        .set({ remainingAmount: remaining - deduction, updatedAt: new Date() })
-        .where(eq(creditTransaction.id, grant.id));
-      reclaimed += deduction;
+    if (record.type === PaymentTypes.SUBSCRIPTION) {
+      refundedSubscriptions.set(record, order);
     }
-    const balances = await tx
-      .select()
-      .from(userCredit)
-      .where(eq(userCredit.userId, record.userId))
-      .limit(2);
-    if (
-      balances.length > 1 ||
-      (reclaimed > 0 &&
-        (!balances[0] || balances[0].currentCredits < reclaimed))
-    )
-      throw new Error(`Waffo 退款积分余额与流水不一致：${record.userId}`);
-    if (reclaimed && balances[0])
-      await tx
-        .update(userCredit)
-        .set({
-          currentCredits: balances[0].currentCredits - reclaimed,
-          updatedAt: new Date(),
-        })
-        .where(eq(userCredit.id, balances[0].id));
-    // 即使积分已经用完，仍保存零金额标记，防止同一次退款反复处理。
-    await tx.insert(creditTransaction).values({
-      id: randomUUID(),
-      userId: record.userId,
-      type: CREDIT_TRANSACTION_TYPE.REFUND,
-      amount: -reclaimed,
-      description: `Waffo 退款 ${order.currency} ${currentRefund.pspAmountDetails.amount}，收回未使用积分 ${reclaimed}`,
+    await settlePaymentRefund({
+      provider: 'waffo',
+      refundId: event.eventId,
+      record,
       paymentId,
-      idempotencyKey: refundKey,
+      originalAmount: original,
+      refundedAmount: refunded,
+      fullRefund: totalRefunded >= original,
+      latestPaymentId: latestSuccessfulPayment(order)?.id,
+      transaction: tx,
+      processedAt: waffoDate(event.timestamp, '事件时间'),
     });
-    if (affectsAccess)
-      await tx
-        .update(payment)
-        .set({
-          paid: false,
-          invoiceId: paymentId,
-          status: 'canceled',
-          cancelAtPeriodEnd: false,
-          webhookProcessedAt: waffoDate(event.timestamp, '事件时间'),
-          updatedAt: new Date(),
-        })
-        .where(eq(payment.id, record.id));
   }
 
   private async notify(

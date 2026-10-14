@@ -208,6 +208,9 @@ importers:
       deepmerge:
         specifier: ^4.3.1
         version: 4.3.1
+      dodopayments:
+        specifier: ^2.54.2
+        version: 2.54.2
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -4527,6 +4530,10 @@ packages:
   diff@8.0.3:
     resolution: {integrity: sha512-qejHi7bcSD4hQAZE0tNAawRK1ZtafHDmMTMkrrIGgSLl7hTnQHmKCeB45xAcbfTqK2zowkM3j3bHt/4b/ARbYQ==}
     engines: {node: '>=0.3.1'}
+
+  dodopayments@2.54.2:
+    resolution: {integrity: sha512-xL0Q3lxgGWT9TBq59sWFsUA4B6GiBd7aHUoLv5n72W5JeGJb3wzV6Y3GSomh35cqJIp+q15CkoRFW+1a3t9/aw==}
+    hasBin: true
 
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
@@ -10896,6 +10903,10 @@ snapshots:
       dequal: 2.0.3
 
   diff@8.0.3: {}
+
+  dodopayments@2.54.2:
+    dependencies:
+      standardwebhooks: 1.0.0
 
   dom-helpers@5.2.1:
     dependencies:

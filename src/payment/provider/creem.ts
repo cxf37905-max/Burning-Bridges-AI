@@ -1,9 +1,12 @@
 import { randomUUID } from 'crypto';
-import { websiteConfig } from '@/config/website';
+import { findPaymentPriceKey, websiteConfig } from '@/config/website';
 import {
   addCredits,
   addLifetimeMonthlyCredits,
   addSubscriptionCredits,
+  confirmRefundSubscriptionCancellation,
+  isPaymentFullyRefunded,
+  settlePaymentRefund,
 } from '@/credits/credits';
 import { getCreditPackageById } from '@/credits/server';
 import { CREDIT_TRANSACTION_TYPE } from '@/credits/types';
@@ -21,7 +24,8 @@ import {
   CheckoutEntity$inboundSchema,
   SubscriptionEntity$inboundSchema,
 } from 'creem/models/components';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   type CheckoutResult,
   type CreateCheckoutParams,
@@ -288,6 +292,25 @@ export class CreemProvider implements PaymentProvider {
       console.log(`handle Creem webhook event, type: ${eventType}`);
 
       switch (eventType) {
+        case 'refund.created': {
+          const refund = z
+            .object({
+              id: z.string().min(1),
+              status: z.string(),
+              refund_amount: z.number().int().positive(),
+              refund_currency: z.string().min(1),
+              transaction: z.object({ id: z.string().min(1) }),
+              checkout: z
+                .object({
+                  metadata: z.record(z.string(), z.unknown()).optional(),
+                })
+                .optional(),
+            })
+            .parse(raw.object);
+          if (refund.status !== 'succeeded') break;
+          await this.settleCreemRefund(refund);
+          break;
+        }
         case 'checkout.completed': {
           const event = this.parseCheckoutEvent(raw);
           await this.onCheckoutCompleted(event);
@@ -350,6 +373,88 @@ export class CreemProvider implements PaymentProvider {
       console.error('Creem webhook handling error:', error);
       throw new Error('Failed to handle Creem webhook event');
     }
+  }
+
+  private async settleCreemRefund(refund: {
+    id: string;
+    refund_amount: number;
+    refund_currency: string;
+    transaction: { id: string };
+    checkout?: { metadata?: Record<string, unknown> };
+  }) {
+    const receipt = await this.client.transactions.getById(
+      refund.transaction.id
+    );
+    const db = await getDb();
+    const syncId = refund.checkout?.metadata?.paymentSyncId;
+    const [record] = await db
+      .select()
+      .from(payment)
+      .where(
+        receipt.subscription
+          ? eq(payment.subscriptionId, receipt.subscription)
+          : typeof syncId === 'string'
+            ? eq(payment.paymentSyncId, syncId)
+            : eq(payment.invoiceId, receipt.id)
+      )
+      .orderBy(desc(payment.createdAt))
+      .limit(1);
+    if (
+      !record ||
+      findPaymentPriceKey(record.priceId)?.provider !== 'creem' ||
+      receipt.id !== refund.transaction.id ||
+      receipt.currency.toUpperCase() !== refund.refund_currency.toUpperCase() ||
+      (receipt.customer && receipt.customer !== record.customerId)
+    ) {
+      throw new Error(`Creem 退款与站内付款不符：${refund.id}/${receipt.id}`);
+    }
+    const subscription = record.subscriptionId
+      ? await this.client.subscriptions.get(record.subscriptionId)
+      : null;
+    const originalAmount = receipt.amountPaid ?? receipt.amount;
+    if ((receipt.refundedAmount ?? 0) < refund.refund_amount)
+      throw new Error(`Creem 平台尚未确认退款金额：${refund.id}`);
+    await settlePaymentRefund({
+      provider: 'creem',
+      refundId: refund.id,
+      record,
+      paymentId: receipt.id,
+      originalAmount,
+      refundedAmount: refund.refund_amount,
+      fullRefund: (receipt.refundedAmount ?? 0) >= originalAmount,
+      latestPaymentId: subscription?.lastTransactionId,
+      legacyPaymentIds:
+        record.type === PaymentTypes.ONE_TIME &&
+        record.invoiceId &&
+        record.invoiceId !== receipt.id
+          ? [record.invoiceId]
+          : undefined,
+    });
+    if (
+      subscription &&
+      !['canceled', 'scheduled_cancel'].includes(subscription.status)
+    ) {
+      const canceled = await this.client.subscriptions.cancel(subscription.id, {
+        mode: 'scheduled',
+        onExecute: 'cancel',
+      });
+      if (
+        canceled.id !== subscription.id ||
+        !['scheduled_cancel', 'canceled'].includes(canceled.status)
+      )
+        throw new Error(`Creem 未确认停止订阅续费：${subscription.id}`);
+    }
+    if (subscription) await confirmRefundSubscriptionCancellation(record);
+  }
+
+  private checkoutReceiptId(object: WebhookCheckoutObject): string {
+    const receiptId =
+      object.order?.transaction ?? object.subscription?.lastTransactionId;
+    if (!receiptId && object.subscription?.status === 'trialing')
+      return `trial:${object.subscription.id}`;
+    if (!receiptId)
+      throw new Error(`Creem 已付款订单缺少交易 ID：${object.id}`);
+    return receiptId;
   }
 
   // ─── Webhook Parsing ──────────────────────────────────────
@@ -450,6 +555,8 @@ export class CreemProvider implements PaymentProvider {
       console.error('<< No userId found in Creem checkout event');
       return;
     }
+    if (await isPaymentFullyRefunded(userId, this.checkoutReceiptId(object)))
+      return;
 
     // Update user's customerId
     if (object.customer) {
@@ -505,6 +612,10 @@ export class CreemProvider implements PaymentProvider {
     }
 
     const paymentRecord = existing[0];
+    const receiptId = sub.lastTransactionId;
+    if (!receiptId) throw new Error(`Creem 订阅付款缺少交易 ID：${sub.id}`);
+    if (await isPaymentFullyRefunded(paymentRecord.userId, receiptId)) return;
+    const canonical = await this.client.subscriptions.get(sub.id);
     const currentPeriodStart = sub.currentPeriodStartDate
       ? new Date(sub.currentPeriodStartDate)
       : null;
@@ -514,32 +625,56 @@ export class CreemProvider implements PaymentProvider {
       paymentRecord.periodStart.getTime() !== currentPeriodStart.getTime();
 
     // Update existing payment record with renewed period
-    await db
-      .update(payment)
-      .set({
-        status: 'active' as PaymentStatus,
-        paid: true,
-        periodStart: currentPeriodStart,
-        periodEnd: sub.currentPeriodEndDate
-          ? new Date(sub.currentPeriodEndDate)
-          : null,
-        // Clear trial fields on renewal
-        trialStart: null,
-        trialEnd: null,
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(payment.subscriptionId, sub.id));
-
-    // Add subscription credits (renewal)
-    if (websiteConfig.credits?.enableCredits) {
-      await addSubscriptionCredits(
-        paymentRecord.userId,
-        paymentRecord.priceId,
-        currentPeriodStart ?? new Date()
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${paymentRecord.userId}, 0))`
       );
-      console.log('Added subscription credits for user:', paymentRecord.userId);
-    }
+      if (await isPaymentFullyRefunded(paymentRecord.userId, receiptId, tx))
+        return;
+      const [current] = await tx
+        .select()
+        .from(payment)
+        .where(eq(payment.id, paymentRecord.id))
+        .limit(1);
+      if (!current)
+        throw new Error(`Creem 入账时找不到付款：${paymentRecord.id}`);
+      if (canonical.lastTransactionId === receiptId)
+        await tx
+          .update(payment)
+          .set({
+            status: 'active' as PaymentStatus,
+            paid: true,
+            invoiceId: receiptId,
+            periodStart: currentPeriodStart,
+            periodEnd: sub.currentPeriodEndDate
+              ? new Date(sub.currentPeriodEndDate)
+              : null,
+            // Clear trial fields on renewal
+            trialStart: null,
+            trialEnd: null,
+            cancelAtPeriodEnd:
+              canonical.status === 'scheduled_cancel' ||
+              canonical.status === 'canceled' ||
+              current.cancelAtPeriodEnd,
+            updatedAt: new Date(),
+          })
+          .where(eq(payment.subscriptionId, sub.id));
+
+      // Add subscription credits (renewal)
+      if (websiteConfig.credits?.enableCredits) {
+        await addSubscriptionCredits(
+          paymentRecord.userId,
+          paymentRecord.priceId,
+          currentPeriodStart ?? new Date(),
+          receiptId,
+          tx
+        );
+        console.log(
+          'Added subscription credits for user:',
+          paymentRecord.userId
+        );
+      }
+    });
 
     if (isRenewal) {
       await sendPaymentNotification({
@@ -768,7 +903,8 @@ export class CreemProvider implements PaymentProvider {
   ): Promise<void> {
     console.log('>> Handle Creem subscription active:', event.id);
 
-    const sub = event.object;
+    const sub = await this.client.subscriptions.get(event.object.id);
+    if (!['active', 'scheduled_cancel'].includes(sub.status)) return;
 
     const db = await getDb();
     const existing = await db
@@ -779,6 +915,14 @@ export class CreemProvider implements PaymentProvider {
       .limit(1);
 
     if (existing.length > 0) {
+      if (
+        existing[0].invoiceId &&
+        (await isPaymentFullyRefunded(
+          existing[0].userId,
+          existing[0].invoiceId
+        ))
+      )
+        return;
       await db
         .update(payment)
         .set({
@@ -790,7 +934,8 @@ export class CreemProvider implements PaymentProvider {
           periodEnd: sub.currentPeriodEndDate
             ? new Date(sub.currentPeriodEndDate)
             : null,
-          cancelAtPeriodEnd: false,
+          cancelAtPeriodEnd:
+            sub.status === 'scheduled_cancel' || existing[0].cancelAtPeriodEnd,
           updatedAt: new Date(),
         })
         .where(eq(payment.subscriptionId, sub.id));
@@ -818,7 +963,7 @@ export class CreemProvider implements PaymentProvider {
   ): Promise<void> {
     console.log('>> Handle Creem subscription update:', event.id);
 
-    const sub = event.object;
+    const sub = await this.client.subscriptions.get(event.object.id);
 
     const db = await getDb();
     const existing = await db
@@ -871,35 +1016,57 @@ export class CreemProvider implements PaymentProvider {
 
     try {
       const db = await getDb();
-      await db.insert(payment).values({
-        id: randomUUID(),
-        priceId: object.product.id,
-        userId,
-        customerId: object.customer?.id ?? '',
-        subscriptionId: null,
-        sessionId: event.id,
-        invoiceId: event.id,
-        paymentSyncId: paymentSyncId ?? null,
-        webhookProcessedAt: null,
-        type: PaymentTypes.ONE_TIME,
-        scene: PaymentScenes.LIFETIME,
-        interval: null,
-        status: 'completed' as PaymentStatus,
-        paid: true,
-        periodStart: null,
-        periodEnd: null,
-        cancelAtPeriodEnd: null,
-        trialStart: null,
-        trialEnd: null,
-        createdAt: currentDate,
-        updatedAt: currentDate,
-      });
+      const committed = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
+        );
+        if (
+          await isPaymentFullyRefunded(
+            userId,
+            this.checkoutReceiptId(object),
+            tx
+          )
+        )
+          return false;
+        await tx.insert(payment).values({
+          id: randomUUID(),
+          priceId: object.product.id,
+          userId,
+          customerId: object.customer?.id ?? '',
+          subscriptionId: null,
+          sessionId: event.id,
+          invoiceId: this.checkoutReceiptId(object),
+          paymentSyncId: paymentSyncId ?? null,
+          webhookProcessedAt: null,
+          type: PaymentTypes.ONE_TIME,
+          scene: PaymentScenes.LIFETIME,
+          interval: null,
+          status: 'completed' as PaymentStatus,
+          paid: true,
+          periodStart: null,
+          periodEnd: null,
+          cancelAtPeriodEnd: null,
+          trialStart: null,
+          trialEnd: null,
+          createdAt: currentDate,
+          updatedAt: currentDate,
+        });
 
-      // Add lifetime credits if enabled
-      if (websiteConfig.credits?.enableCredits) {
-        await addLifetimeMonthlyCredits(userId, object.product.id, currentDate);
-        console.log('Added lifetime credits for user:', userId);
-      }
+        // Add lifetime credits if enabled
+        if (websiteConfig.credits?.enableCredits) {
+          await addLifetimeMonthlyCredits(
+            userId,
+            object.product.id,
+            currentDate,
+            this.checkoutReceiptId(object),
+            tx
+          );
+          console.log('Added lifetime credits for user:', userId);
+        }
+
+        return true;
+      });
+      if (!committed) return;
 
       // Send notification for lifetime purchase
       const amount = object.product.price ? object.product.price / 100 : 0;
@@ -920,7 +1087,12 @@ export class CreemProvider implements PaymentProvider {
         error instanceof Error &&
         error.message.includes('unique constraint')
       ) {
-        await addLifetimeMonthlyCredits(userId, object.product.id, currentDate);
+        await addLifetimeMonthlyCredits(
+          userId,
+          object.product.id,
+          currentDate,
+          this.checkoutReceiptId(object)
+        );
         await this.markCheckoutPaymentProcessed(paymentSyncId);
         console.log('<< Recovered one-time payment credits after retry');
         return;
@@ -948,52 +1120,71 @@ export class CreemProvider implements PaymentProvider {
 
     try {
       const db = await getDb();
-      await db.insert(payment).values({
-        id: randomUUID(),
-        priceId: object.product.id,
-        userId,
-        customerId: object.customer?.id ?? '',
-        subscriptionId: null,
-        sessionId: event.id,
-        invoiceId: event.id,
-        paymentSyncId: paymentSyncId ?? null,
-        webhookProcessedAt: null,
-        type: PaymentTypes.ONE_TIME,
-        scene: PaymentScenes.CREDIT,
-        interval: null,
-        status: 'completed' as PaymentStatus,
-        paid: true,
-        periodStart: null,
-        periodEnd: null,
-        cancelAtPeriodEnd: null,
-        trialStart: null,
-        trialEnd: null,
-        createdAt: currentDate,
-        updatedAt: currentDate,
-      });
-
-      if (packageId && credits) {
-        const creditPackage = getCreditPackageById(packageId);
-        if (creditPackage) {
-          const amount = object.product.price ? object.product.price / 100 : 0;
-          await addCredits({
-            userId,
-            amount: Number.parseInt(credits),
-            type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
-            description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
-            paymentId: event.id,
-            idempotencyKey: `payment:creem:${event.id}`,
-            expireDays: creditPackage.expireDays,
-          });
-          console.log('Added purchased credits for user:', userId);
-        } else {
-          throw new Error(`Credit package not found: ${packageId}`);
-        }
-      } else {
-        throw new Error(
-          `Creem credit purchase metadata is incomplete: ${event.id}`
+      const committed = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
         );
-      }
+        if (
+          await isPaymentFullyRefunded(
+            userId,
+            this.checkoutReceiptId(object),
+            tx
+          )
+        )
+          return false;
+        await tx.insert(payment).values({
+          id: randomUUID(),
+          priceId: object.product.id,
+          userId,
+          customerId: object.customer?.id ?? '',
+          subscriptionId: null,
+          sessionId: event.id,
+          invoiceId: this.checkoutReceiptId(object),
+          paymentSyncId: paymentSyncId ?? null,
+          webhookProcessedAt: null,
+          type: PaymentTypes.ONE_TIME,
+          scene: PaymentScenes.CREDIT,
+          interval: null,
+          status: 'completed' as PaymentStatus,
+          paid: true,
+          periodStart: null,
+          periodEnd: null,
+          cancelAtPeriodEnd: null,
+          trialStart: null,
+          trialEnd: null,
+          createdAt: currentDate,
+          updatedAt: currentDate,
+        });
+
+        if (packageId && credits) {
+          const creditPackage = getCreditPackageById(packageId);
+          if (creditPackage) {
+            const amount = object.product.price
+              ? object.product.price / 100
+              : 0;
+            await addCredits({
+              userId,
+              amount: Number.parseInt(credits),
+              type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
+              description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
+              paymentId: this.checkoutReceiptId(object),
+              transaction: tx,
+              idempotencyKey: `payment:creem:${event.id}`,
+              expireDays: creditPackage.expireDays,
+            });
+            console.log('Added purchased credits for user:', userId);
+          } else {
+            throw new Error(`Credit package not found: ${packageId}`);
+          }
+        } else {
+          throw new Error(
+            `Creem credit purchase metadata is incomplete: ${event.id}`
+          );
+        }
+
+        return true;
+      });
+      if (!committed) return;
 
       await sendPaymentNotification({
         sessionId: event.id,
@@ -1021,7 +1212,7 @@ export class CreemProvider implements PaymentProvider {
               amount: Number.parseInt(credits),
               type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
               description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
-              paymentId: event.id,
+              paymentId: this.checkoutReceiptId(object),
               idempotencyKey: `payment:creem:${event.id}`,
               expireDays: creditPackage.expireDays,
             });
@@ -1063,40 +1254,58 @@ export class CreemProvider implements PaymentProvider {
 
     try {
       const db = await getDb();
-      await db.insert(payment).values({
-        id: randomUUID(),
-        priceId: object.product.id,
-        userId,
-        customerId: object.customer?.id ?? '',
-        subscriptionId,
-        sessionId: event.id,
-        invoiceId: event.id,
-        paymentSyncId: paymentSyncId ?? null,
-        webhookProcessedAt: null,
-        type: PaymentTypes.SUBSCRIPTION,
-        scene: PaymentScenes.SUBSCRIPTION,
-        interval,
-        status: statusOverride ?? ('active' as PaymentStatus),
-        paid: true,
-        periodStart,
-        periodEnd,
-        cancelAtPeriodEnd: false,
-        // Creem has no separate trial fields; during trialing the period dates ARE the trial dates
-        trialStart: isTrialing ? periodStart : null,
-        trialEnd: isTrialing ? periodEnd : null,
-        createdAt: currentDate,
-        updatedAt: currentDate,
-      });
-
-      // Add subscription credits on initial subscription purchase
-      if (websiteConfig.credits?.enableCredits) {
-        await addSubscriptionCredits(
-          userId,
-          object.product.id,
-          periodStart ?? currentDate
+      const committed = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`
         );
-        console.log('Added initial subscription credits for user:', userId);
-      }
+        if (
+          await isPaymentFullyRefunded(
+            userId,
+            this.checkoutReceiptId(object),
+            tx
+          )
+        )
+          return false;
+        await tx.insert(payment).values({
+          id: randomUUID(),
+          priceId: object.product.id,
+          userId,
+          customerId: object.customer?.id ?? '',
+          subscriptionId,
+          sessionId: event.id,
+          invoiceId: this.checkoutReceiptId(object),
+          paymentSyncId: paymentSyncId ?? null,
+          webhookProcessedAt: null,
+          type: PaymentTypes.SUBSCRIPTION,
+          scene: PaymentScenes.SUBSCRIPTION,
+          interval,
+          status: statusOverride ?? ('active' as PaymentStatus),
+          paid: true,
+          periodStart,
+          periodEnd,
+          cancelAtPeriodEnd: false,
+          // Creem has no separate trial fields; during trialing the period dates ARE the trial dates
+          trialStart: isTrialing ? periodStart : null,
+          trialEnd: isTrialing ? periodEnd : null,
+          createdAt: currentDate,
+          updatedAt: currentDate,
+        });
+
+        // Add subscription credits on initial subscription purchase
+        if (websiteConfig.credits?.enableCredits) {
+          await addSubscriptionCredits(
+            userId,
+            object.product.id,
+            periodStart ?? currentDate,
+            this.checkoutReceiptId(object),
+            tx
+          );
+          console.log('Added initial subscription credits for user:', userId);
+        }
+
+        return true;
+      });
+      if (!committed) return;
 
       await sendPaymentNotification({
         sessionId: event.id,
@@ -1119,7 +1328,8 @@ export class CreemProvider implements PaymentProvider {
           await addSubscriptionCredits(
             userId,
             object.product.id,
-            periodStart ?? currentDate
+            periodStart ?? currentDate,
+            this.checkoutReceiptId(object)
           );
         }
         await this.markCheckoutPaymentProcessed(paymentSyncId);

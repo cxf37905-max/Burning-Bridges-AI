@@ -37,7 +37,7 @@ vi.mock('../../src/studio/fal-webhook-url', () => ({
   createFalWebhookUrl: () => 'https://callbacks.example/api/webhooks/fal',
 }));
 vi.mock('../../src/studio/video-storage', () => ({
-  composeStudioVideo: dependencies.compose,
+  finishStudioVideo: dependencies.compose,
 }));
 vi.mock('../../src/studio/fal', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/studio/fal')>()),
@@ -81,8 +81,7 @@ beforeEach(async () => {
   dependencies.getDb.mockResolvedValue(db);
   dependencies.photo.mockResolvedValue('https://photos.example/alice.jpg');
   dependencies.reference.mockResolvedValue({
-    secondReferenceUrl: 'https://references.example/overlap.mp4',
-    overlapFrames: 24,
+    referenceVideoUrl: 'https://references.example/full-15s.mp4',
   });
   dependencies.submit.mockImplementation(async () => randomUUID());
   dependencies.read.mockResolvedValue({ ready: false });
@@ -130,7 +129,7 @@ function rejectFalTask() {
 }
 
 describe('本地 PostgreSQL 扣费与退款事务', () => {
-  it('同一提交重复请求只扣一个 take、只提交两个分段', async () => {
+  it('同一提交重复请求只扣一个 take、只提交一次模型', async () => {
     const requestId = randomUUID();
     const photo = Buffer.from('normalized photo');
     const first = await createStudioVideo(
@@ -154,7 +153,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
         .from(creditTransaction)
         .where(eq(creditTransaction.type, 'USAGE'))
     ).toHaveLength(1);
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
   it('余额不足回滚任务创建，不上传照片、不调用付费 API', async () => {
     await db
@@ -200,7 +199,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     ).toHaveLength(1);
     expect(await balance()).toBe(0);
     expect(await db.select().from(studioVideo)).toHaveLength(1);
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
   it('并发重放同一提交，只建立一个父任务', async () => {
     const requestId = randomUUID();
@@ -211,7 +210,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     ]);
     expect(results[0].id).toBe(results[1].id);
     expect(await balance()).toBe(100);
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
   it('复用提交身份但篡改照片被拒绝，不再次扣次数', async () => {
     const requestId = randomUUID();
@@ -230,9 +229,9 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
       )
     ).rejects.toMatchObject({ status: 409 });
     expect(await balance()).toBe(100);
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
-  it('两段模型明确失败整条只退一次，重复查询不能反复退回', async () => {
+  it('模型明确失败整条只退一次，重复查询不能反复退回', async () => {
     const video = await createStudioVideo(
       'alice',
       randomUUID(),
@@ -256,7 +255,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     for (let retry = 0; retry < 3; retry++)
       await refreshStudioVideo(video.id, 'alice');
     expect(await balance()).toBe(200);
-    expect(dependencies.read).toHaveBeenCalledTimes(2);
+    expect(dependencies.read).toHaveBeenCalledTimes(1);
     expect(
       await db
         .select()
@@ -264,56 +263,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
         .where(eq(creditTransaction.type, 'REFUND'))
     ).toHaveLength(1);
   });
-  it('一段成功另一段串行重试两次仍明确失败，原子退回一次且保留成功结果', async () => {
-    const video = await createStudioVideo(
-      'alice',
-      randomUUID(),
-      'chandelier',
-      Buffer.from('photo')
-    );
-    const successId = video.klingPipeline!.steps[0].requestId;
-    dependencies.read.mockImplementation(async (endpoint, requestId) => {
-      if (requestId === successId)
-        return {
-          ready: true,
-          output: { video: { url: 'https://videos.example/success.mp4' } },
-        };
-      throw new FalTaskFailedError({
-        endpoint,
-        requestId,
-        source: 'queue-status',
-        status: 'COMPLETED',
-        error: 'generation failed',
-      });
-    });
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await db
-        .update(studioVideo)
-        .set({ updatedAt: new Date(0) })
-        .where(eq(studioVideo.id, video.id));
-      await Promise.all([
-        refreshStudioVideo(video.id, 'alice'),
-        refreshStudioVideo(video.id, 'alice'),
-      ]);
-      expect(await balance()).toBe(attempt === 2 ? 200 : 100);
-      expect(dependencies.submit).toHaveBeenCalledTimes(
-        Math.min(3 + attempt, 4)
-      );
-    }
-    const failed = await getOwnedVideo(video.id, 'alice');
-    expect(failed.status).toBe('failed');
-    expect(failed.klingPipeline!.steps[0]).toMatchObject({
-      state: 'done',
-      requestId: successId,
-    });
-    expect(failed.klingPipeline!.steps[1].failures).toHaveLength(3);
-    expect(publicVideoJob(failed).refunded).toBe(true);
-    await refreshStudioVideo(video.id, 'alice');
-    expect(await balance()).toBe(200);
-    expect(dependencies.submit).toHaveBeenCalledTimes(4);
-    expect(dependencies.compose).not.toHaveBeenCalled();
-  });
-  it('两段成功后本地合成失败自动重试，不退次数、不重新调用生成模型', async () => {
+  it('模型成功后本地音轨处理失败自动重试，不退次数、不重新调用生成模型', async () => {
     const video = await createStudioVideo(
       'alice',
       randomUUID(),
@@ -338,7 +288,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     expect(complete.status).toBe('succeeded');
     expect(complete.videoUrl).toBe('https://results.example/finished.mp4');
     expect(dependencies.compose).toHaveBeenCalledTimes(2);
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
   it('准备照片失败尚未扣次数或调用 fal，重试同一提交可以继续', async () => {
     dependencies.photo.mockRejectedValueOnce(new Error('storage unavailable'));
@@ -357,7 +307,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     );
     expect(retried.status).toBe('processing');
     expect(await balance()).toBe(100);
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
   it('提交结果未知不会退款或重新付费，重复 POST 也复用同一任务', async () => {
     dependencies.submit.mockRejectedValueOnce(new TypeError('timeout'));
@@ -425,7 +375,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     }
     expect(await balance()).toBe(100);
     expect((await getOwnedVideo(video.id, 'alice')).refundedAt).toBeNull();
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
     expect(dependencies.read).toHaveBeenCalledTimes(3);
   });
   it('缺少结果链接不退款，恢复后查询原任务', async () => {
@@ -445,7 +395,7 @@ describe('本地 PostgreSQL 扣费与退款事务', () => {
     expect((await getOwnedVideo(video.id, 'alice')).refundedAt).toBeNull();
     dependencies.read.mockResolvedValue({ ready: false });
     await refreshStudioVideo(video.id, 'alice');
-    expect(dependencies.submit).toHaveBeenCalledTimes(2);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
   });
   it('仅有本地失败文字，没有 fal 最终失败证据时不能退次数', async () => {
     const video = await createStudioVideo(

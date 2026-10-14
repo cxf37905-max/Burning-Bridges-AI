@@ -2,8 +2,6 @@ import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { getBaseUrl } from '@/lib/urls';
-import { videoExpiresAt, videoHasExpired } from './media-retention';
 import { creditTransaction, studioVideo } from '@/db/schema';
 import {
   consumeCreditsInTransaction,
@@ -17,7 +15,7 @@ import { storeStudioReference } from './reference-storage';
 import { createFalWebhookUrl } from './fal-webhook-url';
 import { FalSubmissionNotSentError } from './fal-submission-error';
 import { getKlingTemplate } from './kling-templates';
-import { composeStudioVideo } from './video-storage';
+import { finishStudioVideo } from './video-storage';
 import {
   advanceKlingPipeline,
   createKlingPipeline,
@@ -176,8 +174,7 @@ async function advanceOwnedVideo(id: string, userId: string, picture?: Buffer) {
       webhookUrl: (stepId, submissionId) =>
         createFalWebhookUrl({ videoId: id, stepId, submissionId }),
       read: readFalTask,
-      compose: (first, second, sceneId, overlapFrames) =>
-        composeStudioVideo(id, first, second, sceneId, overlapFrames),
+      finishSingle: (videoUrl, sceneId) => finishStudioVideo(id, videoUrl, sceneId),
       getTaskFailure: (reason) =>
         reason instanceof FalTaskFailedError ? reason.failure : null,
       getUnsentSubmission: (reason) =>
@@ -219,7 +216,7 @@ export async function createStudioVideo(
   sceneId: string,
   picture: Buffer
 ) {
-  const template = getKlingTemplate(sceneId);
+  getKlingTemplate(sceneId);
   const id = createHash('sha256')
     .update(`${userId}:${requestId}`)
     .digest('hex')
@@ -257,7 +254,7 @@ export async function createStudioVideo(
         userId,
         sceneId,
         photoHash,
-        referenceUrl: template.segments[0].url,
+        referenceUrl: pipeline.referenceVideoUrl,
         klingPipeline: pipeline,
       })
       .onConflictDoNothing()
@@ -330,25 +327,4 @@ export async function advancePendingVideos() {
   };
 }
 
-export function publicVideoJob(
-  video: Awaited<ReturnType<typeof getOwnedVideo>>
-) {
-  const expired =
-    video.status === 'succeeded' && videoHasExpired(video.updatedAt);
-  return {
-    id: video.id,
-    sceneId: video.sceneId,
-    status: video.status,
-    videoUrl:
-      video.status === 'succeeded' && video.videoUrl && !expired
-        ? new URL(`/api/studio/videos/${video.id}/file`, getBaseUrl()).href
-        : null,
-    expired,
-    expiresAt:
-      video.status === 'succeeded'
-        ? videoExpiresAt(video.updatedAt).toISOString()
-        : null,
-    message: video.failureReason,
-    refunded: video.refundedAt !== null,
-  };
-}
+export { publicVideoJob } from './public-video-job';

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import useSWR from 'swr';
+import { publicVideoJobSchema, type PublicVideoJob } from '@/studio/video-job-contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient } from '@/lib/auth-client';
 import { creditsKeys, useCreditBalance } from '@/hooks/use-credits';
@@ -14,7 +15,7 @@ import { TemplatePreviewDialog } from './template-preview-dialog';
 import { StudioSigninDialog } from './studio-signin-dialog';
 import { CreditPackDialog } from './credit-pack-dialog';
 import Image from 'next/image';
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { ArrowRight, Check, LoaderCircle, Play, Plus, X } from 'lucide-react';
 import {
   partyScenes,
@@ -58,6 +59,7 @@ export function VideoCreator({
   purchasesReady,
   sceneId,
   onSceneChange: setSceneId,
+  onReferencePreview,
   onJobChange: setJobId,
   onSubmittingChange,
 }: {
@@ -66,7 +68,8 @@ export function VideoCreator({
   purchasesReady: boolean;
   sceneId: PartySceneId;
   onSceneChange: (id: PartySceneId) => void;
-  onJobChange: (id: string) => void;
+  onJobChange: (job: PublicVideoJob) => void;
+  onReferencePreview: () => void;
   onSubmittingChange: (submitting: boolean) => void;
 }) {
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
@@ -89,7 +92,6 @@ export function VideoCreator({
   const [error, setError] = useState('');
   const [needsPack, setNeedsPack] = useState(false);
   const [restored, setRestored] = useState(false);
-  const [checkoutNotice, setCheckoutNotice] = useState(false);
   const [reading, setReading] = useState(false);
   const [consent, setConsent] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -105,13 +107,6 @@ export function VideoCreator({
     revalidateOnReconnect: false,
     shouldRetryOnError: false,
     onSuccess: (draft) => {
-      const pageUrl = new URL(window.location.href);
-      if (pageUrl.searchParams.get('checkout') === 'returned') {
-        setCheckoutNotice(true);
-        pageUrl.searchParams.delete('checkout');
-        window.history.replaceState(window.history.state, '', pageUrl);
-        void queryClient.invalidateQueries({ queryKey: creditsKeys.all });
-      }
       if (
         !draft ||
         (draft.userId && draft.userId !== user?.id) ||
@@ -228,7 +223,7 @@ export function VideoCreator({
           result.error ||
             'This video could not be submitted. Retry the same video or check your library.'
         );
-      setJobId(result.id);
+      setJobId(publicVideoJobSchema.parse(result));
       requestId.current = null;
       setRestored(false);
       try {
@@ -260,6 +255,15 @@ export function VideoCreator({
       setSubmitting(false);
       onSubmittingChange(false);
     }
+  }
+
+  function selectScene(id: PartySceneId) {
+    if (submitting) return;
+    selectionVersion.current++;
+    setSceneId(id);
+    onReferencePreview();
+    void clearPhotoDraft().catch((reason: Error) => setError(reason.message));
+    requestId.current = null;
   }
 
   async function selectPhoto(file?: File) {
@@ -396,12 +400,6 @@ export function VideoCreator({
               video when ready.
             </p>
           )}
-          {checkoutNotice && (
-            <output className="bb-photo-help">
-              Payment is being verified. Your balance updates after
-              confirmation. Review your photo and click Generate when ready.
-            </output>
-          )}
         </div>
         <fieldset className="bb-creator-step bb-scene-selector">
           <legend className="bb-step-heading">
@@ -419,14 +417,8 @@ export function VideoCreator({
                     name="party-scene"
                     value={scene.id}
                     checked={sceneId === scene.id}
-                    onChange={() => {
-                      selectionVersion.current++;
-                      setSceneId(scene.id);
-                      void clearPhotoDraft().catch((reason: Error) =>
-                        setError(reason.message)
-                      );
-                      requestId.current = null;
-                    }}
+                    onClick={onReferencePreview}
+                    onChange={() => selectScene(scene.id)}
                     disabled={submitting}
                   />
                   <span className="bb-scene-thumb">
@@ -449,7 +441,11 @@ export function VideoCreator({
                   type="button"
                   className="bb-template-preview"
                   aria-label={`Preview ${scene.name}`}
-                  onClick={() => setPreviewSceneId(scene.id)}
+                  disabled={submitting}
+                  onClick={() => {
+                    selectScene(scene.id);
+                    setPreviewSceneId(scene.id);
+                  }}
                 >
                   <Play size={9} fill="currentColor" /> Preview
                 </button>

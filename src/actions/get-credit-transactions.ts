@@ -131,7 +131,13 @@ export const getCreditTransactionsAction = userActionClient
       return {
         success: true,
         data: {
-          items,
+          items: items.map((item) => ({
+            ...item,
+            description:
+              item.type === 'REFUND'
+                ? (item.description?.split('\n退款记账：')[0] ?? null)
+                : item.description,
+          })),
           total: Number(count),
         },
       };

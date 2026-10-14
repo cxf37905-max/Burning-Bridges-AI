@@ -9,13 +9,14 @@ import {
 import AffonsoScript from '@/components/affiliate/affonso';
 import PromotekitScript from '@/components/affiliate/promotekit';
 import { NavigationProgress } from '@/components/layout/navigation-progress';
+import { RouteTransitions } from '@/components/layout/route-transitions';
 import { routing } from '@/i18n/routing';
 import { cn } from '@/lib/utils';
 import { type Locale, NextIntlClientProvider, hasLocale } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import { Providers } from './providers';
 
@@ -59,6 +60,17 @@ export default async function LocaleLayout({
       <head>
         <AffonsoScript />
         <PromotekitScript />
+        <noscript>
+          <style>{`
+            #hero [style*="opacity:0;"], #hero [style*="opacity: 0;"],
+            #hero [style$="opacity:0"], #hero [style$="opacity: 0"],
+            .reveal-hidden {
+              opacity: 1 !important;
+              transform: none !important;
+              filter: none !important;
+            }
+          `}</style>
+        </noscript>
       </head>
       <body
         className={cn(
@@ -74,6 +86,9 @@ export default async function LocaleLayout({
           <NextIntlClientProvider>
             <Providers>
               <NavigationProgress />
+              <Suspense fallback={null}>
+                <RouteTransitions />
+              </Suspense>
               {children}
 
               <Toaster richColors position="top-right" offset={64} />

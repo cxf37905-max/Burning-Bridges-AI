@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Clapperboard } from 'lucide-react';
-import Link from 'next/link';
-import { Skeleton } from '@/components/ui/skeleton';
+import { RouteLink as Link } from '@/components/layout/locale-link';
+import { VideoPlayerPlaceholder } from './video-player-placeholder';
+import type { PublicVideoJob } from '@/studio/video-job-contract';
 import { partyScenes, type PartySceneId } from '@/studio/catalog';
 import { VideoJobStatus } from './video-job-status';
 import { VideoGenerationState } from './video-generation-state';
@@ -11,6 +12,7 @@ import { VideoGenerationState } from './video-generation-state';
 export function VideoPreview({
   sceneId,
   jobId,
+  initialJob,
   showResult,
   submitting,
   onShowResult,
@@ -20,6 +22,7 @@ export function VideoPreview({
 }: {
   sceneId: PartySceneId;
   jobId: string | null;
+  initialJob?: PublicVideoJob;
   showResult: boolean;
   submitting: boolean;
   onShowResult: (show: boolean) => void;
@@ -31,6 +34,9 @@ export function VideoPreview({
   const [unavailable, setUnavailable] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
   const hasVideo = Boolean(jobId || submitting);
+  useEffect(() => {
+    if (!showResult) resultRef.current?.querySelector('video')?.pause();
+  }, [showResult]);
   return (
     <aside className="bb-effect" id="effect" aria-label="Video preview">
       <div className="bb-effect-heading">
@@ -72,11 +78,11 @@ export function VideoPreview({
       )}
       {jobId && !submitting && (
         <div ref={resultRef} className="bb-result-player" hidden={!showResult}>
-          <VideoJobStatus key={jobId} id={jobId} appearance="studio" />
+          <VideoJobStatus key={jobId} id={jobId} initialJob={initialJob} checkingStatus={restoring} appearance="studio" />
         </div>
       )}
-      {!hasVideo && (restoring || restoreError) ? (
-        <div className="bb-result-player bb-studio-restore" aria-live="polite">
+      {!hasVideo && showResult && (restoring || restoreError) ? (
+        <div className="bb-result-player" aria-live="polite">
           {restoreError ? (
             <>
               <p>Your studio could not be restored.</p>
@@ -88,11 +94,7 @@ export function VideoPreview({
               </Link>
             </>
           ) : (
-            <>
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
-              <span>Restoring your studio…</span>
-            </>
+            <VideoPlayerPlaceholder />
           )}
         </div>
       ) : (!showResult || !hasVideo) && (

@@ -10,7 +10,7 @@ import {
 } from './fal-contract';
 import { getKlingTemplate, klingScenes } from './kling-templates';
 
-const stepIds = ['segment-1', 'segment-2', 'merge', 'audio'] as const;
+const stepIds = ['segment-1', 'audio'] as const;
 type StepId = (typeof stepIds)[number];
 const stepSchema = z.object({
   id: z.enum(stepIds),
@@ -27,63 +27,20 @@ const pipelineFields = {
   photoUrl: mediaUrl,
   videoUrl: mediaUrl.optional(),
   failureReason: z.string().optional(),
-  // 保留旧字段，旧版单段失败证据不能直接触发新规则退款。
-  falFailure: falFailureSchema.optional(),
   compositionError: z.boolean().default(false),
   compositionFailure: z.string().optional(),
-  // 旧任务没有此字段，不能对其直接删除一秒。
-  seam: z
-    .object({
-      secondReferenceUrl: mediaUrl,
-      overlapFrames: z.literal(24),
-    })
-    .optional(),
 };
-const currentPipelineSchema = z.object({
+const singlePipelineSchema = z.object({
   ...pipelineFields,
-  version: z.literal(2),
-  steps: z
-    .array(stepSchema)
-    .length(4)
-    .refine(
-      (steps) => steps.every((step, index) => step.id === stepIds[index]),
-      'Pipeline steps are missing, duplicated, or out of order.'
-    ),
+  version: z.literal(3),
+  referenceVideoUrl: mediaUrl,
+  steps: z.array(stepSchema).length(2).refine(
+    (steps) => steps[0]?.id === 'segment-1' && steps[1]?.id === 'audio',
+    'Single video pipeline steps are missing or out of order.'
+  ),
 });
-const legacyStepIds = [
-  'segment-1',
-  'segment-2',
-  'inspect-1',
-  'inspect-2',
-  'merge',
-  'audio',
-  'verify',
-] as const;
-const legacyPipelineSchema = z
-  .object({
-    ...pipelineFields,
-    version: z.literal(1),
-    steps: z
-      .array(stepSchema.extend({ id: z.enum(legacyStepIds) }))
-      .length(7)
-      .refine((steps) =>
-        steps.every((step, index) => step.id === legacyStepIds[index])
-      ),
-  })
-  .transform((legacy) =>
-    currentPipelineSchema.parse({
-      ...legacy,
-      version: 2,
-      steps: legacy.steps.filter((step) =>
-        (stepIds as readonly string[]).includes(step.id)
-      ),
-    })
-  );
-export const klingPipelineSchema = z.union([
-  currentPipelineSchema,
-  legacyPipelineSchema,
-]);
-export type KlingPipeline = z.infer<typeof currentPipelineSchema>;
+export const klingPipelineSchema = singlePipelineSchema;
+export type KlingPipeline = z.infer<typeof singlePipelineSchema>;
 type SegmentStep = KlingPipeline['steps'][number];
 
 export interface KlingPipelineIO {
@@ -99,29 +56,24 @@ export interface KlingPipelineIO {
   ) => Promise<{ ready: false } | { ready: true; output: unknown }>;
   getTaskFailure: (reason: unknown) => FalFailure | null;
   getUnsentSubmission?: (reason: unknown) => FalUnsentSubmission | null;
-  webhookUrl?: (stepId: 'segment-1' | 'segment-2', submissionId: string) => string;
-  compose: (
-    first: string,
-    second: string,
-    sceneId: string,
-    overlapFrames?: number
-  ) => Promise<string>;
+  webhookUrl?: (stepId: 'segment-1', submissionId: string) => string;
+  finishSingle: (video: string, sceneId: string) => Promise<string>;
 }
 
 export function createKlingPipeline(
   photoUrl: string,
   sceneId: string,
   tier = 'standard',
-  seam?: KlingPipeline['seam']
+  reference?: { referenceVideoUrl: string }
 ) {
   getKlingTemplate(sceneId);
-  return klingPipelineSchema.parse({
-    version: 2,
+  return singlePipelineSchema.parse({
+    version: 3,
     photoUrl,
     sceneId,
     tier,
-    seam,
-    steps: stepIds.map((id) => ({ id, state: 'idle' })),
+    referenceVideoUrl: reference?.referenceVideoUrl,
+    steps: ['segment-1', 'audio'].map((id) => ({ id, state: 'idle' })),
   });
 }
 
@@ -133,19 +85,15 @@ function completedVideo(pipeline: KlingPipeline, id: StepId) {
 }
 
 export function klingStepRequest(pipeline: KlingPipeline, id: StepId) {
-  if (id !== 'segment-1' && id !== 'segment-2') return null;
-  const template = getKlingTemplate(pipeline.sceneId);
+  if (id !== 'segment-1') return null;
   return {
     endpoint:
       `fal-ai/kling-video/o3/${pipeline.tier}/video-to-video/edit` as FalEndpoint,
     input: {
-      prompt:
-        'Replace the main character in @Video1 with the main character in @Image1.',
-      video_url:
-        id === 'segment-2' && pipeline.seam
-          ? pipeline.seam.secondReferenceUrl
-          : template.segments[id === 'segment-1' ? 0 : 1].url,
-      image_urls: [pipeline.photoUrl],
+      prompt: 'Replace the main character in @Video1 with @Element1.',
+      video_url: pipeline.referenceVideoUrl,
+      // 单张主体照片绑定为角色元素，不作为普通风格参考图。
+      elements: [{ frontal_image_url: pipeline.photoUrl }],
       keep_audio: false,
     },
   };
@@ -166,41 +114,13 @@ function confirmedFailure(pipeline: KlingPipeline, step: SegmentStep) {
 export function returnableVideoCreditEvidence(
   pipeline: KlingPipeline
 ): (FalFailure | FalUnsentSubmission)[] | null {
-  const segments = pipeline.steps.slice(0, 2);
-  const unsent = (step: SegmentStep) => {
-    const request = klingStepRequest(pipeline, step.id);
-    return step.state === 'failed' && !step.requestId &&
-      step.notSubmitted && step.notSubmitted.endpoint === request?.endpoint
-      ? falUnsentSubmissionSchema.parse(step.notSubmitted) : null;
-  };
-  const unsentProof = segments.map(unsent).find((proof) => proof !== null);
-  if (unsentProof && segments.every((step) =>
-    Boolean(unsent(step)) || Boolean(confirmedFailure(pipeline, step)) ||
-    (step.state === 'done' && falVideoResult.safeParse(step.output).success) ||
-    (step.state === 'idle' && !step.requestId && !step.submissionId && !step.failures.length)
-  )) return [unsentProof];
-  const first = confirmedFailure(pipeline, pipeline.steps[0]);
-  const second = confirmedFailure(pipeline, pipeline.steps[1]);
-  if (first && second) return [first, second];
-  const failed = pipeline.steps
-    .slice(0, 2)
-    .find((step) => confirmedFailure(pipeline, step));
-  if (
-    !failed ||
-    failed.failures.length !== 3 ||
-    !pipeline.steps.slice(0, 2).some((step) => step.state === 'done')
-  )
-    return null;
-  const request = klingStepRequest(pipeline, failed.id)!;
-  const failures = failed.failures.map((failure) =>
-    falFailureSchema.parse(failure)
-  );
-  if (
-    failures.some((failure) => failure.endpoint !== request.endpoint) ||
-    new Set(failures.map((failure) => failure.requestId)).size !== 3
-  )
-    return null;
-  return failures;
+  const step = pipeline.steps[0];
+  const request = klingStepRequest(pipeline, step.id)!;
+  if (step.state === 'failed' && !step.requestId && step.notSubmitted &&
+    step.notSubmitted.endpoint === request.endpoint)
+    return [falUnsentSubmissionSchema.parse(step.notSubmitted)];
+  const failure = confirmedFailure(pipeline, step);
+  return failure ? [failure] : null;
 }
 
 async function submitSegment(
@@ -210,7 +130,7 @@ async function submitSegment(
 ) {
   const request = klingStepRequest(pipeline, step.id)!;
   const submissionId = crypto.randomUUID();
-  const webhookUrl = io.webhookUrl?.(step.id as 'segment-1' | 'segment-2', submissionId);
+  const webhookUrl = io.webhookUrl?.(step.id as 'segment-1', submissionId);
   if (webhookUrl) step.submissionId = submissionId;
   delete step.notSubmitted;
   step.state = 'submitting';
@@ -277,50 +197,23 @@ async function querySegment(
   await io.persist(pipeline);
 }
 
-async function retryFailedSegment(
-  pipeline: KlingPipeline,
-  io: KlingPipelineIO
-) {
-  const segments = pipeline.steps.slice(0, 2);
-  if (!segments.some((step) => step.state === 'done')) return;
-  const failed = segments.find((step) => confirmedFailure(pipeline, step));
-  if (!failed || failed.failures.length >= 3) return;
-  // 首次失败后最多再提交两次；每次必须先有对应 request_id 的最终失败证据。
-  delete failed.requestId;
-  await submitSegment(pipeline, failed, io);
-}
-
-async function composeCompletedSegments(
+async function finishGeneratedVideo(
   pipeline: KlingPipeline,
   io: KlingPipelineIO
 ) {
   const first = completedVideo(pipeline, 'segment-1');
-  const second = completedVideo(pipeline, 'segment-2');
-  if (!first || !second) return;
-  // 旧版远程合成保留身份，需人工核对，不能静默重复付费。
-  if (
-    pipeline.steps
-      .slice(2)
-      .some((step) => step.requestId && step.state !== 'done')
-  )
-    return;
-  pipeline.steps[2].state = 'submitting';
+  if (!first) return;
+  const finalSteps = pipeline.steps.slice(1);
+  finalSteps[0].state = 'submitting';
   await io.persist(pipeline);
   let videoUrl: string;
   try {
     videoUrl = mediaUrl.parse(
-      await (pipeline.seam
-        ? io.compose(
-            first,
-            second,
-            pipeline.sceneId,
-            pipeline.seam.overlapFrames
-          )
-        : io.compose(first, second, pipeline.sceneId))
+      await io.finishSingle(first, pipeline.sceneId)
     );
   } catch (reason) {
-    // 本地合成可安全重做；保留两段成功结果，下次调度仅重试合成。
-    pipeline.steps[2].state = 'idle';
+    // 本地处理可安全重做；保留模型成功结果，下次调度不重新提交模型。
+    finalSteps[0].state = 'idle';
     pipeline.compositionError = true;
     pipeline.compositionFailure =
       reason instanceof Error
@@ -332,7 +225,7 @@ async function composeCompletedSegments(
   pipeline.videoUrl = videoUrl;
   pipeline.compositionError = false;
   delete pipeline.compositionFailure;
-  for (const step of pipeline.steps.slice(2)) {
+  for (const step of finalSteps) {
     step.state = 'done';
     step.output = { video: { url: videoUrl } };
   }
@@ -343,12 +236,11 @@ export async function advanceKlingPipeline(
   pipeline: KlingPipeline,
   io: KlingPipelineIO
 ) {
-  currentPipelineSchema.parse(pipeline);
+  klingPipelineSchema.parse(pipeline);
   if (pipeline.videoUrl || pipeline.failureReason) return pipeline;
-  const alreadyComplete = pipeline.steps
-    .slice(0, 2)
-    .every((step) => step.state === 'done');
-  for (const step of pipeline.steps.slice(0, 2)) {
+  const segments = pipeline.steps.slice(0, 1);
+  const alreadyComplete = segments.every((step) => step.state === 'done');
+  for (const step of segments) {
     if (step.state === 'submitting') {
       step.state = 'unknown';
       await io.persist(pipeline);
@@ -366,33 +258,21 @@ export async function advanceKlingPipeline(
     await io.persist(pipeline);
     return pipeline;
   }
-  await retryFailedSegment(pipeline, io);
   // 生成查询与本地转码分开推进，给转码保留完整的执行时间。
-  if (alreadyComplete) await composeCompletedSegments(pipeline, io);
+  if (alreadyComplete) await finishGeneratedVideo(pipeline, io);
   return pipeline;
 }
 
 export function klingProgressMessage(pipeline: KlingPipeline) {
   if (pipeline.failureReason) return pipeline.failureReason;
   if (pipeline.videoUrl) return 'Your Burning Bridges AI video is ready.';
+  const segments = pipeline.steps.slice(0, 1);
   if (
     pipeline.steps.some((step) => step.state === 'unknown') ||
-    pipeline.steps.slice(0, 2).some((step) => step.state === 'submitting')
+    segments.some((step) => step.state === 'submitting')
   )
     return 'Submission confirmation is delayed. We are waiting for the generation service. Your credits have not been returned.';
-  if (
-    pipeline.steps
-      .slice(2)
-      .some((step) => step.requestId && step.state !== 'done')
-  )
-    return 'This earlier take needs support to confirm its final processing status. Your credits have not been returned.';
   if (pipeline.compositionError)
-    return 'Your video parts are ready. We are retrying the final assembly automatically.';
-  if (pipeline.steps.slice(0, 2).every((step) => step.state === 'done'))
-    return 'Creating your Burning Bridges AI video…';
-  if (pipeline.steps.slice(0, 2).some((step) => step.failures.length > 0))
-    return pipeline.steps.slice(0, 2).some((step) => step.state === 'done')
-      ? 'We are keeping your completed part and retrying only the failed part.'
-      : 'Waiting for the remaining part to finish…';
+    return 'Your video is ready. We are retrying the final processing automatically.';
   return 'Creating your Burning Bridges AI video…';
 }

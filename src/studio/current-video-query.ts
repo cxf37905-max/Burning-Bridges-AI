@@ -1,12 +1,8 @@
 import { z } from 'zod';
+import { publicVideoJobSchema } from './video-job-contract';
 
 const currentVideoResponse = z.object({
-  video: z
-    .object({
-      id: z.string().regex(/^[a-f0-9]{32}$/),
-      sceneId: z.enum(['chandelier', 'after-hours']),
-    })
-    .nullable(),
+  video: publicVideoJobSchema.nullable(),
 });
 
 export async function fetchCurrentStudioVideo([url]: readonly [string, string]) {

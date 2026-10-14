@@ -43,28 +43,25 @@ export const creditsKeys = {
   ) => [...creditsKeys.transactions(userId), filters] as const,
 };
 
-// Hook to fetch credit balance
+// 余额展示与支付同步共用服务端读取入口。
+async function fetchCreditBalance(userId: string | undefined) {
+  if (!userId) throw new Error('读取积分余额需要登录用户');
+  const result = await getCreditBalanceAction();
+  if (!result?.data?.success) {
+    throw new Error(result?.data?.error || '读取积分余额失败');
+  }
+  return result.data.credits ?? 0;
+}
+
 export function useCreditBalance(
   userId: string | undefined,
   options?: CreditQueryOptions
 ) {
   return useQuery({
     queryKey: creditsKeys.balance(userId || ''),
-    queryFn: async () => {
-      if (!userId) {
-        throw new Error('User ID is required');
-      }
-      console.log('Fetching credit balance...');
-      const result = await getCreditBalanceAction();
-      if (!result?.data?.success) {
-        console.log('useCreditBalance error:', result?.data?.error);
-        throw new Error(
-          result?.data?.error || 'Failed to fetch credit balance'
-        );
-      }
-      console.log('Credit balance fetched:', result.data.credits);
-      return result.data.credits || 0;
-    },
+    queryFn: () => fetchCreditBalance(userId),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
     enabled: !!userId && (options?.enabled ?? true),
     refetchInterval: options?.refetchInterval ?? false,
   });
@@ -98,8 +95,9 @@ export function useCreditStats(
 export function useCreditPurchaseSync(
   userId: string | undefined,
   syncId: string,
-  options?: CreditQueryOptions
+  options?: CreditQueryOptions & { refreshBalanceOnSync?: boolean }
 ) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: creditsKeys.purchaseSync(userId || '', syncId),
     queryFn: async () => {
@@ -115,10 +113,29 @@ export function useCreditPurchaseSync(
         );
       }
 
+      if (result.data.synced && options?.refreshBalanceOnSync) {
+        const balanceKey = creditsKeys.balance(userId);
+        // 取消入账前发出的查询，避免旧请求晚到后覆盖新余额。
+        await queryClient.cancelQueries({ queryKey: balanceKey });
+        const balance = await fetchCreditBalance(userId);
+        queryClient.setQueryData(balanceKey, balance);
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: creditsKeys.stats(userId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: creditsKeys.transactions(userId),
+          }),
+        ]);
+      }
       return result.data.synced;
     },
     enabled: !!userId && !!syncId && (options?.enabled ?? true),
-    refetchInterval: options?.refetchInterval ?? false,
+    staleTime: 0,
+    refetchInterval: (query) =>
+      options?.refreshBalanceOnSync && query.state.data === true
+        ? false
+        : (options?.refetchInterval ?? false),
   });
 }
 

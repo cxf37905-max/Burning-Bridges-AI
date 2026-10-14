@@ -14,6 +14,7 @@ vi.mock('next/navigation', async (original) => ({
   ...(await original<typeof import('next/navigation')>()),
   usePathname: () => '/settings/credits',
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 import AccountLayout from '../../src/app/[locale]/(protected)/layout';
 import CreditsPage from '../../src/app/[locale]/(protected)/settings/credits/page';
@@ -31,6 +32,7 @@ const records = {
   orders: [
     {
       id: 'waffo-preview-order',
+      providerLabel: 'Waffo',
       videos: 3,
       cents: 1990,
       currency: 'USD',

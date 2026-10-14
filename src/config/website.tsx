@@ -57,6 +57,17 @@ const paymentPriceIds: Record<
     creditsEnterprise:
       process.env.NEXT_PUBLIC_WAFFO_PRODUCT_CREDITS_ENTERPRISE ?? '',
   },
+  dodo: {
+    proMonthly: process.env.NEXT_PUBLIC_DODO_PRODUCT_PRO_MONTHLY ?? '',
+    proYearly: process.env.NEXT_PUBLIC_DODO_PRODUCT_PRO_YEARLY ?? '',
+    lifetime: process.env.NEXT_PUBLIC_DODO_PRODUCT_LIFETIME ?? '',
+    creditsBasic: process.env.NEXT_PUBLIC_DODO_PRODUCT_CREDITS_BASIC ?? '',
+    creditsStandard:
+      process.env.NEXT_PUBLIC_DODO_PRODUCT_CREDITS_STANDARD ?? '',
+    creditsPremium: process.env.NEXT_PUBLIC_DODO_PRODUCT_CREDITS_PREMIUM ?? '',
+    creditsEnterprise:
+      process.env.NEXT_PUBLIC_DODO_PRODUCT_CREDITS_ENTERPRISE ?? '',
+  },
 };
 
 export function findPaymentPriceKey(priceId: string) {
@@ -72,11 +83,21 @@ export function findPaymentPriceKey(priceId: string) {
   return null;
 }
 
-// 本站使用与模板相同的 Waffo Pancake 支付商。
+// 支付商由环境变量选择：stripe、creem、paypal、waffo 或 dodo
 const paymentProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER ||
   'waffo') as PaymentConfig['provider'];
 const priceIds = paymentPriceIds[paymentProvider];
 if (!priceIds) throw new Error(`支付服务商配置无效：${paymentProvider}`);
+export const paymentProviderLabels: Record<PaymentConfig['provider'], string> = {
+  stripe: 'Stripe',
+  creem: 'Creem',
+  paypal: 'PayPal',
+  waffo: 'Waffo',
+  dodo: 'Dodo Payments',
+};
+export const paymentProviderLabel = paymentProviderLabels[paymentProvider];
+export const paymentProviderLegalLabel =
+  paymentProvider === 'waffo' ? 'Waffo Pancake' : paymentProviderLabel;
 const creditPriceIds = {
   basic: priceIds.creditsBasic,
   standard: priceIds.creditsStandard,
@@ -101,7 +122,7 @@ export const websiteConfig: WebsiteConfig = {
   legal: {
     supportEmail: legalSupportEmail,
     // 政策真正发布或更新的日期。
-    lastUpdated: '2026-09-24',
+    lastUpdated: '2026-10-14',
   },
   ui: {
     mode: {

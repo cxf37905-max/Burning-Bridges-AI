@@ -2682,13 +2682,12 @@
     margin-bottom: 36px;
   }
 }
-.bb-motion-section,
-.bb-guides-section {
+.bb-motion-section {
   padding-block: 48px;
 }
 .bb-motion-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px;
   margin-top: 28px;
 }
@@ -2757,29 +2756,6 @@
 .bb-photo-tips li + li {
   margin-top: 6px;
 }
-.bb-guides-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
-  margin-top: 28px;
-}
-.bb-guides-grid article {
-  padding-block: 20px;
-  border-top: 1px solid var(--bb-line);
-}
-.bb-guides-grid h3 {
-  font-size: 21px;
-}
-.bb-guides-grid p {
-  color: var(--bb-muted);
-  margin-block: 14px;
-  font-size: 14px;
-  line-height: 1.9;
-}
-.bb-guides-grid .bb-text-link {
-  color: var(--bb-lime);
-  font-size: 10px;
-}
 @media (max-width: 700px) {
   .bb-motion-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2789,13 +2765,11 @@
     height: 180px;
   }
   .bb-motion-section,
-  .bb-guides-section,
   .bb-how-section {
     padding-block: 36px;
   }
   .bb-steps,
-  .bb-photo-tips,
-  .bb-guides-grid {
+  .bb-photo-tips {
     grid-template-columns: 1fr;
     gap: 22px;
   }

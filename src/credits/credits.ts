@@ -5,14 +5,17 @@ import {
 import { randomUUID } from 'crypto';
 import { websiteConfig } from '@/config/website';
 import { getDb } from '@/db';
-import { creditTransaction, userCredit } from '@/db/schema';
+import { creditTransaction, payment, userCredit } from '@/db/schema';
+import type { Payment } from '@/db/types';
 import { findPlanByPlanId, findPlanByPriceId } from '@/lib/price-plan';
 import { addDays, addMonths } from 'date-fns';
-import { and, asc, eq, exists, gt, isNull, lte, not, or, sql } from 'drizzle-orm';
+import {
+  and, asc, eq, exists, gt, inArray, isNull, lte, not, or, sql,
+} from 'drizzle-orm';
 import { CREDIT_TRANSACTION_TYPE } from './types';
 
 type CreditDatabase = Awaited<ReturnType<typeof getDb>>;
-type CreditDatabaseTransaction = Parameters<
+export type CreditDatabaseTransaction = Parameters<
   Parameters<CreditDatabase['transaction']>[0]
 >[0];
 
@@ -27,6 +30,297 @@ async function lockUserCredits(tx: CreditDatabaseTransaction, userId: string) {
 function getMonthlyCreditKey(type: string, userId: string, date = new Date()) {
   const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   return `monthly:${type}:${userId}:${month}`;
+}
+
+type RefundCreditDetails = {
+  paymentRecordId: string;
+  originalAmount: number;
+  refundedAmount: number;
+  fullRefund: boolean;
+  reclaimedByGrant: Record<string, number>;
+};
+
+const refundDetailsPrefix = '\n退款记账：';
+
+function refundCreditDetails(
+  description: string | null
+): RefundCreditDetails | null {
+  if (!description) return null;
+  const index = description.indexOf(refundDetailsPrefix);
+  if (index < 0) return null;
+  const details = JSON.parse(
+    description.slice(index + refundDetailsPrefix.length)
+  ) as RefundCreditDetails;
+  if (
+    !details.paymentRecordId ||
+    !Number.isSafeInteger(details.originalAmount) ||
+    details.originalAmount <= 0 ||
+    !Number.isSafeInteger(details.refundedAmount) ||
+    details.refundedAmount <= 0 ||
+    details.refundedAmount > details.originalAmount ||
+    typeof details.fullRefund !== 'boolean' ||
+    !details.reclaimedByGrant ||
+    Object.values(details.reclaimedByGrant).some(
+      (amount) => !Number.isSafeInteger(amount) || amount < 0
+    )
+  )
+    throw new Error('数据库退款记账信息无效');
+  return details;
+}
+
+// 付款、退款和消耗共用用户事务锁；退款只回收原付款对应的未使用积分。
+export async function applyRecordedPaymentRefund(
+  tx: CreditDatabaseTransaction,
+  userId: string,
+  paymentId: string
+) {
+  const refunds = await tx
+    .select()
+    .from(creditTransaction)
+    .where(
+      and(
+        eq(creditTransaction.userId, userId),
+        eq(creditTransaction.paymentId, paymentId),
+        eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.REFUND)
+      )
+    );
+  const grants = await tx
+    .select()
+    .from(creditTransaction)
+    .where(
+      and(
+        eq(creditTransaction.userId, userId),
+        eq(creditTransaction.paymentId, paymentId),
+        gt(creditTransaction.amount, 0)
+      )
+    );
+  for (const refund of refunds) {
+    const details = refundCreditDetails(refund.description);
+    if (!details) continue;
+    let reclaimed = 0;
+    for (const grant of grants) {
+      const remaining = grant.remainingAmount ?? 0;
+      const previous = details.reclaimedByGrant[grant.id] ?? 0;
+      const target = Math.floor(
+        (grant.amount * details.refundedAmount) / details.originalAmount
+      );
+      const deduction = Math.min(
+        remaining,
+        details.fullRefund ? remaining : Math.max(0, target - previous)
+      );
+      if (!deduction) continue;
+      await tx
+        .update(creditTransaction)
+        .set({ remainingAmount: remaining - deduction, updatedAt: new Date() })
+        .where(eq(creditTransaction.id, grant.id));
+      grant.remainingAmount = remaining - deduction;
+      details.reclaimedByGrant[grant.id] = previous + deduction;
+      reclaimed += deduction;
+    }
+    if (!reclaimed) continue;
+    const balances = await tx
+      .select()
+      .from(userCredit)
+      .where(eq(userCredit.userId, userId))
+      .limit(2);
+    if (balances.length !== 1 || balances[0].currentCredits < reclaimed) {
+      throw new Error(`退款积分余额与流水不一致：${userId}/${paymentId}`);
+    }
+    await tx
+      .update(userCredit)
+      .set({
+        currentCredits: balances[0].currentCredits - reclaimed,
+        updatedAt: new Date(),
+      })
+      .where(eq(userCredit.id, balances[0].id));
+    await tx
+      .update(creditTransaction)
+      .set({
+        amount: refund.amount - reclaimed,
+        description:
+          (refund.description ?? '').split(refundDetailsPrefix)[0] +
+          refundDetailsPrefix +
+          JSON.stringify(details),
+        updatedAt: new Date(),
+      })
+      .where(eq(creditTransaction.id, refund.id));
+  }
+}
+
+export async function isPaymentFullyRefunded(
+  userId: string,
+  paymentId: string,
+  transaction?: CreditDatabaseTransaction
+) {
+  const db = transaction ?? (await getDb());
+  const refunds = await db
+    .select()
+    .from(creditTransaction)
+    .where(
+      and(
+        eq(creditTransaction.userId, userId),
+        eq(creditTransaction.paymentId, paymentId),
+        eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.REFUND)
+      )
+    );
+  return refunds.some(
+    (refund) => refundCreditDetails(refund.description)?.fullRefund
+  );
+}
+
+// 支付商只提供已验签、已向平台确认的退款事实，共用数据库和积分规则。
+export async function settlePaymentRefund(input: {
+  provider: string;
+  refundId: string;
+  record: Payment;
+  paymentId: string;
+  originalAmount: number;
+  refundedAmount: number;
+  fullRefund?: boolean;
+  latestPaymentId?: string;
+  legacyPaymentIds?: string[];
+  transaction?: CreditDatabaseTransaction;
+  processedAt?: Date;
+}) {
+  const { record, paymentId, originalAmount, refundedAmount } = input;
+  if (
+    !input.refundId ||
+    !paymentId ||
+    !Number.isSafeInteger(originalAmount) ||
+    !Number.isSafeInteger(refundedAmount) ||
+    originalAmount <= 0 ||
+    refundedAmount <= 0 ||
+    refundedAmount > originalAmount
+  ) {
+    throw new Error(
+      `退款金额或付款标识无效：${input.provider}/${input.refundId}/${refundedAmount}/${originalAmount}`
+    );
+  }
+  const settle = async (tx: CreditDatabaseTransaction) => {
+    await lockUserCredits(tx, record.userId);
+    const [current] = await tx
+      .select()
+      .from(payment)
+      .where(eq(payment.id, record.id))
+      .limit(1);
+    if (!current || current.userId !== record.userId)
+      throw new Error(`退款付款记录不存在：${record.id}`);
+    const key = `refund:${input.provider}:${input.refundId}`;
+    const refunds = await tx
+      .select()
+      .from(creditTransaction)
+      .where(
+        and(
+          eq(creditTransaction.userId, record.userId),
+          eq(creditTransaction.paymentId, paymentId),
+          eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.REFUND)
+        )
+      );
+    const duplicate = refunds.find((refund) => refund.idempotencyKey === key);
+    const total = refunds.reduce(
+      (sum, refund) =>
+        sum + (refundCreditDetails(refund.description)?.refundedAmount ?? 0),
+      duplicate ? 0 : refundedAmount
+    );
+    const fullRefund =
+      input.fullRefund ||
+      total >= originalAmount ||
+      refunds.some(
+        (refund) => refundCreditDetails(refund.description)?.fullRefund
+      );
+    if (input.legacyPaymentIds?.length) {
+      await tx
+        .update(creditTransaction)
+        .set({ paymentId })
+        .where(
+          and(
+            eq(creditTransaction.userId, record.userId),
+            inArray(creditTransaction.paymentId, input.legacyPaymentIds),
+            gt(creditTransaction.amount, 0)
+          )
+        );
+    }
+    if (!duplicate) {
+      const details: RefundCreditDetails = {
+        paymentRecordId: record.id,
+        originalAmount,
+        refundedAmount,
+        fullRefund: Boolean(fullRefund),
+        reclaimedByGrant: {},
+      };
+      await tx.insert(creditTransaction).values({
+        id: randomUUID(),
+        userId: record.userId,
+        type: CREDIT_TRANSACTION_TYPE.REFUND,
+        amount: 0,
+        paymentId,
+        idempotencyKey: key,
+        description:
+          `${input.provider} 退款，按原付款回收未使用积分` +
+          refundDetailsPrefix +
+          JSON.stringify(details),
+      });
+    }
+    await applyRecordedPaymentRefund(tx, record.userId, paymentId);
+    const affectsAccess =
+      fullRefund &&
+      (current.type === 'one_time' ||
+        ((input.latestPaymentId ?? current.invoiceId) === paymentId &&
+          (current.invoiceId === record.invoiceId ||
+            current.invoiceId === paymentId)));
+    if (affectsAccess)
+      await tx
+        .update(payment)
+        .set({
+          paid: false,
+          invoiceId: paymentId,
+          status: 'canceled',
+          cancelAtPeriodEnd: false,
+          webhookProcessedAt: input.processedAt ?? new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(payment.id, current.id));
+  };
+  if (input.transaction) return settle(input.transaction);
+  const db = await getDb();
+  return db.transaction(settle);
+}
+
+export async function hasRecordedPaymentRefund(record: Payment) {
+  const db = await getDb();
+  const refunds = await db
+    .select()
+    .from(creditTransaction)
+    .where(
+      and(
+        eq(creditTransaction.userId, record.userId),
+        eq(creditTransaction.type, CREDIT_TRANSACTION_TYPE.REFUND)
+      )
+    );
+  return refunds.some(
+    (refund) =>
+      refundCreditDetails(refund.description)?.paymentRecordId === record.id
+  );
+}
+
+export async function confirmRefundSubscriptionCancellation(record: Payment) {
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await lockUserCredits(tx, record.userId);
+    const [current] = await tx
+      .select()
+      .from(payment)
+      .where(eq(payment.id, record.id))
+      .limit(1);
+    if (!current) throw new Error(`取消续费后找不到付款记录：${record.id}`);
+    await tx
+      .update(payment)
+      .set({
+        cancelAtPeriodEnd: current.paid && current.status !== 'canceled',
+        updatedAt: new Date(),
+      })
+      .where(eq(payment.id, current.id));
+  });
 }
 
 /**
@@ -148,9 +442,10 @@ type CreditGrant = {
   transaction?: CreditDatabaseTransaction;
 };
 export async function addCredits(grant: CreditGrant) {
+  if (!websiteConfig.credits.enableCredits) return false;
   if (
-    grant.type !== CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE ||
-    !grant.paymentId
+    !automaticCreditGrantsEnabled &&
+    (grant.type !== CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE || !grant.paymentId)
   )
     throw new Error('Only verified purchases can grant new credits.');
   if (grant.transaction)
@@ -244,6 +539,8 @@ async function grantCreditsInTransaction(
   }
 
   await expireUserCreditsInTransaction(tx, userId, now);
+  if (paymentId)
+    await applyRecordedPaymentRefund(tx, userId, paymentId);
   return true;
 }
 export async function refundVideoCreditsInTransaction(

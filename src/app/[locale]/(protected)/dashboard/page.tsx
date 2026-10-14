@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { readStudioAccountRecords } from '@/studio/account-records';
 import { getStudioAvailability } from '@/studio/availability';
 import { AccountPageHeading } from '@/components/studio/account-page-heading';

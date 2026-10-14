@@ -4,6 +4,10 @@ import {
   addCredits,
   addLifetimeMonthlyCredits,
   addSubscriptionCredits,
+  confirmRefundSubscriptionCancellation,
+  hasRecordedPaymentRefund,
+  isPaymentFullyRefunded,
+  settlePaymentRefund,
 } from '@/credits/credits';
 import { getCreditPackageById } from '@/credits/server';
 import { CREDIT_TRANSACTION_TYPE } from '@/credits/types';
@@ -11,7 +15,8 @@ import { getDb } from '@/db';
 import { payment } from '@/db/schema';
 import { findConfiguredPriceById, findPlanByPlanId } from '@/lib/price-plan';
 import { sendPaymentNotification } from '@/notification';
-import { eq } from 'drizzle-orm';
+import { addMonths } from 'date-fns';
+import { eq, sql } from 'drizzle-orm';
 import {
   type CheckoutResult,
   type CreateCheckoutParams,
@@ -72,6 +77,44 @@ interface PaypalWebhookEvent {
     billing_agreement_id?: string;
     supplementary_data?: { related_ids?: { order_id?: string } };
   };
+}
+
+interface PaypalRefund {
+  id: string;
+  status?: string;
+  state?: string;
+  amount: PaypalMoney & { total?: string; currency?: string };
+  sale_id?: string;
+  links?: PaypalLink[];
+}
+interface PaypalReceipt {
+  id: string;
+  status?: string;
+  state?: string;
+  amount: PaypalMoney & { total?: string; currency?: string };
+  billing_agreement_id?: string;
+  create_time?: string;
+  links?: PaypalLink[];
+  supplementary_data?: { related_ids?: { order_id?: string } };
+}
+
+function paypalMinorAmount(
+  value: string | undefined,
+  currency: string | undefined
+) {
+  // 站内当前报价使用美分；不默默接受不适用的币种或浮点舍入。
+  if (
+    !value ||
+    !currency ||
+    !['USD', 'EUR', 'GBP', 'CNY', 'HKD', 'CAD', 'AUD'].includes(currency) ||
+    !/^\d+(\.\d{1,2})?$/.test(value)
+  )
+    throw new Error(`PayPal 金额或币种无效：${currency}/${value}`);
+  const [whole, decimal = ''] = value.split('.');
+  const amount = Number(whole) * 100 + Number(decimal.padEnd(2, '0'));
+  if (!Number.isSafeInteger(amount) || amount <= 0)
+    throw new Error(`PayPal 金额无效：${value}`);
+  return amount;
 }
 
 function approvalUrl(links: PaypalLink[] | undefined): string {
@@ -142,6 +185,7 @@ class PaypalApi {
     if (!response.ok) {
       throw new Error(`PayPal ${method} ${path} 失败：${response.status}`);
     }
+    if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
 
@@ -287,12 +331,14 @@ async function settlePaypalOrder(order: PaypalOrder): Promise<void> {
   if (record.paid) return;
 
   const unit = order.purchase_units?.[0];
-  const capture = unit?.payments?.captures?.find(
-    (item) => item.status === 'COMPLETED'
+  const capture = unit?.payments?.captures?.find((item) =>
+    ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(item.status)
   );
   if (!capture || unit?.custom_id !== record.paymentSyncId) {
     throw new Error(`PayPal 订单缺少有效的支付确认：${order.id}`);
   }
+  if (capture.status === 'REFUNDED') return;
+  if (await isPaymentFullyRefunded(record.userId, capture.id)) return;
   const expected = expectedOrderPurchase(record.priceId, record.scene);
   if (
     capture.amount.currency_code !== expected.currency ||
@@ -301,32 +347,45 @@ async function settlePaypalOrder(order: PaypalOrder): Promise<void> {
     throw new Error(`PayPal 支付金额与站内价格不一致：${order.id}`);
   }
 
-  if (record.scene === PaymentScenes.CREDIT) {
-    await addCredits({
-      userId: record.userId,
-      amount: expected.credits,
-      type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
-      description: `PayPal 积分包购买：${record.priceId}`,
-      paymentId: capture.id,
-      idempotencyKey: `payment:paypal:${capture.id}`,
-      expireDays: expected.expireDays,
-    });
-  } else if (websiteConfig.credits.enableCredits) {
-    await addLifetimeMonthlyCredits(record.userId, record.priceId);
-  }
-
   const db = await getDb();
-  await db
-    .update(payment)
-    .set({
-      customerId: order.payer?.payer_id ?? 'paypal',
-      invoiceId: capture.id,
-      status: 'completed',
-      paid: true,
-      webhookProcessedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(payment.id, record.id));
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${record.userId}, 0))`
+    );
+    if (await isPaymentFullyRefunded(record.userId, capture.id, tx)) return;
+    if (record.scene === PaymentScenes.CREDIT) {
+      await addCredits({
+        userId: record.userId,
+        amount: expected.credits,
+        type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
+        description: `PayPal 积分包购买：${record.priceId}`,
+        paymentId: capture.id,
+        transaction: tx,
+        idempotencyKey: `payment:paypal:${capture.id}`,
+        expireDays: expected.expireDays,
+      });
+    } else if (websiteConfig.credits.enableCredits) {
+      await addLifetimeMonthlyCredits(
+        record.userId,
+        record.priceId,
+        new Date(),
+        capture.id,
+        tx
+      );
+    }
+
+    await tx
+      .update(payment)
+      .set({
+        customerId: order.payer?.payer_id ?? 'paypal',
+        invoiceId: capture.id,
+        status: 'completed',
+        paid: true,
+        webhookProcessedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(payment.id, record.id));
+  });
 
   try {
     await sendPaymentNotification({
@@ -408,12 +467,19 @@ async function syncPaypalSubscription(
   if (subscription.plan_id !== record.priceId) {
     throw new Error(`PayPal 订阅计划与本地记录不符：${subscriptionId}`);
   }
+  const retainPaidPeriod =
+    record.paid &&
+    (record.cancelAtPeriodEnd || (await hasRecordedPaymentRefund(record))) &&
+    Boolean(record.periodEnd && record.periodEnd > new Date()) &&
+    subscription.status === 'CANCELLED';
   const db = await getDb();
   await db
     .update(payment)
     .set({
       customerId: subscription.subscriber?.payer_id ?? record.customerId,
-      status: statusOverride ?? paymentStatus(subscription.status),
+      status: retainPaidPeriod
+        ? 'active'
+        : (statusOverride ?? paymentStatus(subscription.status)),
       periodStart: subscription.billing_info?.last_payment?.time
         ? new Date(subscription.billing_info.last_payment.time)
         : record.periodStart,
@@ -433,53 +499,83 @@ async function settlePaypalSubscriptionSale(
   const record = await findPaypalPaymentBySubscription(subscriptionId);
   if (!record) throw new Error(`找不到 PayPal 订阅记录：${subscriptionId}`);
   if (record.invoiceId === saleId) return;
+  if (await isPaymentFullyRefunded(record.userId, saleId)) return;
   const subscription: PaypalSubscription =
     await api.getSubscription(subscriptionId);
+  const sale = await api.request<PaypalReceipt>(
+    'GET',
+    `/v1/payments/sale/${encodeURIComponent(saleId)}`
+  );
+  if (
+    sale.id !== saleId ||
+    sale.billing_agreement_id !== subscriptionId ||
+    !['completed', 'partially_refunded', 'refunded'].includes(sale.state ?? '')
+  )
+    throw new Error(`PayPal 订阅付款未确认或关联不符：${saleId}`);
+  if (sale.state === 'refunded') return;
   if (
     subscription.plan_id !== record.priceId ||
-    subscription.status !== 'ACTIVE'
+    !['ACTIVE', 'CANCELLED'].includes(subscription.status)
   ) {
     throw new Error(`PayPal 订阅未激活或计划不符：${subscriptionId}`);
   }
   const expected = findConfiguredPriceById(record.priceId);
-  const paidAmount = subscription.billing_info?.last_payment?.amount;
+  const grantDate = sale.create_time ? new Date(sale.create_time) : null;
+  if (!grantDate || Number.isNaN(grantDate.getTime()))
+    throw new Error(`PayPal 付款缺少有效时间：${saleId}/${sale.create_time}`);
+  const paidAmount = sale.amount;
   if (
     !expected ||
     !paidAmount ||
-    paidAmount.currency_code !== expected.currency ||
-    Number(paidAmount.value) * 100 !== expected.amount
+    paidAmount.currency !== expected.currency ||
+    paypalMinorAmount(paidAmount.total, paidAmount.currency) !== expected.amount
   ) {
     throw new Error(`PayPal 订阅扣款金额与站内价格不一致：${subscriptionId}`);
   }
 
-  if (websiteConfig.credits.enableCredits) {
-    await addSubscriptionCredits(
-      record.userId,
-      record.priceId,
-      subscription.billing_info?.last_payment?.time
-        ? new Date(subscription.billing_info.last_payment.time)
-        : new Date()
-    );
-  }
   const db = await getDb();
-  await db
-    .update(payment)
-    .set({
-      customerId: subscription.subscriber?.payer_id ?? record.customerId,
-      invoiceId: saleId,
-      status: 'active',
-      paid: true,
-      periodStart: subscription.billing_info?.last_payment?.time
-        ? new Date(subscription.billing_info.last_payment.time)
-        : new Date(),
-      periodEnd: subscription.billing_info?.next_billing_time
-        ? new Date(subscription.billing_info.next_billing_time)
-        : null,
-      cancelAtPeriodEnd: false,
-      webhookProcessedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(payment.id, record.id));
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${record.userId}, 0))`
+    );
+    if (await isPaymentFullyRefunded(record.userId, saleId, tx)) return;
+    if (websiteConfig.credits.enableCredits) {
+      await addSubscriptionCredits(
+        record.userId,
+        record.priceId,
+        grantDate,
+        saleId,
+        tx
+      );
+    }
+    const [current] = await tx
+      .select()
+      .from(payment)
+      .where(eq(payment.id, record.id))
+      .limit(1);
+    if (!current) throw new Error(`PayPal 入账时找不到付款：${record.id}`);
+    // 旧账期的迟到回调只补积分，不覆盖已支付的新账期。
+    if (current.periodStart && current.periodStart > grantDate) return;
+    const periodEnd = subscription.billing_info?.next_billing_time
+      ? new Date(subscription.billing_info.next_billing_time)
+      : (current.periodEnd ??
+        addMonths(grantDate, expected.interval === 'year' ? 12 : 1));
+    await tx
+      .update(payment)
+      .set({
+        customerId: subscription.subscriber?.payer_id ?? record.customerId,
+        invoiceId: saleId,
+        status: periodEnd > new Date() ? 'active' : 'canceled',
+        paid: true,
+        periodStart: grantDate,
+        periodEnd,
+        cancelAtPeriodEnd:
+          subscription.status === 'CANCELLED' || current.cancelAtPeriodEnd,
+        webhookProcessedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(payment.id, record.id));
+  });
 
   try {
     await sendPaymentNotification({
@@ -491,6 +587,103 @@ async function settlePaypalSubscriptionSale(
   } catch (error) {
     console.error('PayPal 订阅已入账，但通知发送失败：', error);
   }
+}
+
+async function settlePaypalRefund(api: PaypalApi, event: PaypalWebhookEvent) {
+  const refundId = event.resource.id;
+  if (!refundId) throw new Error('PayPal 退款通知缺少退款 ID');
+  const saleRefund = event.event_type === 'PAYMENT.SALE.REFUNDED';
+  const refund = await api.request<PaypalRefund>(
+    'GET',
+    saleRefund
+      ? `/v1/payments/refund/${encodeURIComponent(refundId)}`
+      : `/v2/payments/refunds/${encodeURIComponent(refundId)}`
+  );
+  if (
+    (saleRefund ? refund.state : refund.status)?.toUpperCase() !== 'COMPLETED'
+  )
+    return;
+  if (refund.id !== refundId)
+    throw new Error(`PayPal 退款 ID 不一致：${refundId}`);
+  // 仅提取平台返回的关联 ID，绝不携带访问令牌请求回调中任意 URL。
+  const captureLink = refund.links?.find((link) => link.rel === 'up');
+  const captureId = captureLink
+    ? new URL(captureLink.href).pathname.match(
+        /^\/v2\/payments\/captures\/([A-Za-z0-9]+)$/
+      )?.[1]
+    : undefined;
+  const receiptId = saleRefund ? refund.sale_id : captureId;
+  if (!receiptId) throw new Error(`PayPal 退款缺少原付款关联：${refundId}`);
+  const receipt = await api.request<PaypalReceipt>(
+    'GET',
+    saleRefund
+      ? `/v1/payments/sale/${encodeURIComponent(receiptId)}`
+      : `/v2/payments/captures/${encodeURIComponent(receiptId)}`
+  );
+  const subscriptionId = receipt.billing_agreement_id;
+  const orderLink = receipt.links?.find((link) => link.rel === 'up');
+  const orderId =
+    receipt.supplementary_data?.related_ids?.order_id ??
+    (orderLink
+      ? new URL(orderLink.href).pathname.match(
+          /^\/v2\/checkout\/orders\/([A-Za-z0-9]+)$/
+        )?.[1]
+      : undefined);
+  const db = await getDb();
+  const [record] = subscriptionId
+    ? [await findPaypalPaymentBySubscription(subscriptionId)]
+    : orderId
+      ? [await findPaypalPaymentByCheckout(orderId)]
+      : await db
+          .select()
+          .from(payment)
+          .where(eq(payment.invoiceId, receiptId))
+          .limit(1);
+  const currency = saleRefund
+    ? refund.amount.currency
+    : refund.amount.currency_code;
+  const receiptCurrency = saleRefund
+    ? receipt.amount.currency
+    : receipt.amount.currency_code;
+  if (
+    !record ||
+    findPaymentPriceKey(record.priceId)?.provider !== 'paypal' ||
+    receipt.id !== receiptId ||
+    currency !== receiptCurrency ||
+    (saleRefund && record.subscriptionId !== subscriptionId) ||
+    (!saleRefund && record.type !== PaymentTypes.ONE_TIME)
+  )
+    throw new Error(`PayPal 退款与站内付款不符：${refundId}/${receiptId}`);
+  const subscription = record.subscriptionId
+    ? await api.getSubscription(record.subscriptionId)
+    : null;
+  if (subscription && subscription.plan_id !== record.priceId)
+    throw new Error(`PayPal 退款订阅计划不一致：${subscription.id}`);
+  await settlePaymentRefund({
+    provider: 'paypal',
+    refundId,
+    record,
+    paymentId: receiptId,
+    originalAmount: paypalMinorAmount(
+      saleRefund ? receipt.amount.total : receipt.amount.value,
+      currency
+    ),
+    refundedAmount: paypalMinorAmount(
+      saleRefund ? refund.amount.total : refund.amount.value,
+      currency
+    ),
+    fullRefund:
+      (saleRefund ? receipt.state : receipt.status)?.toUpperCase() ===
+      'REFUNDED',
+  });
+  if (subscription && !['CANCELLED', 'EXPIRED'].includes(subscription.status)) {
+    await api.request<void>(
+      'POST',
+      `/v1/billing/subscriptions/${encodeURIComponent(subscription.id)}/cancel`,
+      { reason: 'Refund approved; stop future subscription charges' }
+    );
+  }
+  if (subscription) await confirmRefundSubscriptionCancellation(record);
 }
 
 async function handlePaypalWebhook(
@@ -505,6 +698,10 @@ async function handlePaypalWebhook(
   await api.verifyWebhook(event, headers);
 
   switch (event.event_type) {
+    case 'PAYMENT.CAPTURE.REFUNDED':
+    case 'PAYMENT.SALE.REFUNDED':
+      await settlePaypalRefund(api, event);
+      return;
     case 'CHECKOUT.ORDER.APPROVED': {
       const orderId = event.resource.id;
       if (!orderId) throw new Error('PayPal 审批事件缺少订单 ID');

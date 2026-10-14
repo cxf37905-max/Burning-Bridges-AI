@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 export const falWebhookContext = z.object({
   videoId: z.string().regex(/^[a-f0-9]{32}$/),
-  stepId: z.enum(['segment-1', 'segment-2']),
+  stepId: z.literal('segment-1'),
   submissionId: z.uuid(),
 });
 export type FalWebhookContext = z.infer<typeof falWebhookContext>;

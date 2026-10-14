@@ -6,7 +6,7 @@ import { findPaymentPriceKey } from '@/config/website';
 import { userActionClient } from '@/lib/safe-action';
 import { getUrlWithLocale } from '@/lib/urls';
 import { createCustomerPortal } from '@/payment';
-import { type CreatePortalParams, PaymentTypes } from '@/payment/types';
+import { type CreatePortalParams } from '@/payment/types';
 import { and, desc, eq } from 'drizzle-orm';
 import { getLocale } from 'next-intl/server';
 import { z } from 'zod';
@@ -35,25 +35,24 @@ export const createPortalAction = userActionClient
         .where(eq(user.id, currentUser.id))
         .limit(1);
 
-      const subscriptionResult = await db
+      const purchaseResult = await db
         .select({ customerId: payment.customerId, priceId: payment.priceId })
         .from(payment)
         .where(
           and(
             eq(payment.userId, currentUser.id),
-            eq(payment.type, PaymentTypes.SUBSCRIPTION),
             eq(payment.paid, true)
           )
         )
         .orderBy(desc(payment.createdAt))
         .limit(1);
 
-      const subscription = subscriptionResult[0];
-      const subscriptionProvider = subscription
-        ? findPaymentPriceKey(subscription.priceId)?.provider
+      const purchase = purchaseResult[0];
+      const purchaseProvider = purchase
+        ? findPaymentPriceKey(purchase.priceId)?.provider
         : undefined;
       const customerId =
-        subscription?.customerId || customerResult[0]?.customerId;
+        purchase?.customerId || customerResult[0]?.customerId;
 
       if (!customerId) {
         console.error(`No customer found for user ${currentUser.id}`);
@@ -75,7 +74,7 @@ export const createPortalAction = userActionClient
         locale,
       };
 
-      const result = await createCustomerPortal(params, subscriptionProvider);
+      const result = await createCustomerPortal(params, purchaseProvider);
       // console.log('create customer portal result:', result);
       return {
         success: true,

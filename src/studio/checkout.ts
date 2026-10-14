@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { payment } from '@/db/schema';
-import { websiteConfig } from '@/config/website';
+import { paymentProviderLabel, websiteConfig } from '@/config/website';
 import { getCreditPackageById } from '@/credits/server';
 import { createCreditCheckout } from '@/payment';
 import { findVideoPack, studioBrand } from './catalog';
@@ -15,11 +15,11 @@ export async function createVideoCheckout(
 ) {
   const pack = findVideoPack(packId);
   if (!pack) throw new Error(`视频套餐不存在：${packId}`);
-  if (websiteConfig.payment.provider !== 'waffo')
-    throw new Error('本站视频积分包需要启用 Waffo Pancake 支付。');
   const creditPack = getCreditPackageById(pack.creditPackageId);
   if (!creditPack?.price.priceId)
-    throw new Error(`尚未配置 Waffo 产品 ID：${pack.creditPackageId}`);
+    throw new Error(
+      `尚未配置 ${paymentProviderLabel} 产品 ID：${pack.creditPackageId}`
+    );
   const id = createHash('sha256')
     .update(`${user.id}:${requestId}`)
     .digest('hex')
@@ -37,12 +37,15 @@ export async function createVideoCheckout(
   const origin = new URL(process.env.NEXT_PUBLIC_BASE_URL || studioBrand.url)
     .origin;
   const returnBaseUrl =
+    websiteConfig.payment.provider === 'waffo' &&
     process.env.WAFFO_DEBUG === 'true'
       ? process.env.WAFFO_RETURN_BASE_URL
       : undefined;
-  const successUrl = returnBaseUrl
-    ? new URL('/api/studio/checkout/return', returnBaseUrl).toString()
-    : `${origin}/?checkout=returned#studio`;
+  const returnUrl = returnBaseUrl
+    ? new URL('/api/studio/checkout/return', returnBaseUrl)
+    : new URL('/?checkout=returned#studio', origin);
+  returnUrl.searchParams.set('syncId', id);
+  const successUrl = returnUrl.toString();
   // 付款、验签、查单和积分入账全部交给模板的支付接口。
   const result = await createCreditCheckout({
     packageId: creditPack.id,

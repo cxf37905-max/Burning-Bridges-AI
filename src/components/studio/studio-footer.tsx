@@ -1,5 +1,6 @@
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { ArrowUpRight, AudioLines } from 'lucide-react';
+import { websiteConfig } from '@/config/website';
 
 export function StudioFooter() {
   return (
@@ -19,12 +20,9 @@ export function StudioFooter() {
             </p>
           </div>
           <div className="bb-footer-links">
-            <Link href="/guides/how-to-make-burning-bridges-ai-video">
-              How to make your video <ArrowUpRight size={13} />
-            </Link>
-            <Link href="/guides/burning-bridges-ai-meaning">
-              The trend, explained <ArrowUpRight size={13} />
-            </Link>
+            <a href={`mailto:${websiteConfig.legal.supportEmail}`}>
+              {websiteConfig.legal.supportEmail} <ArrowUpRight size={13} />
+            </a>
             <Link href="/pricing">
               Video packs <ArrowUpRight size={13} />
             </Link>

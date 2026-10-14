@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { ArrowUpRight, LoaderCircle } from 'lucide-react';
 
 export function VideoGenerationState({

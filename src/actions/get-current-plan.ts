@@ -12,7 +12,7 @@ import {
   type PricePlan,
   type Subscription,
 } from '@/payment/types';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -69,6 +69,11 @@ export const getCurrentPlanAction = userActionClient
               // Check for active or trialing subscriptions
               and(
                 eq(payment.type, PaymentTypes.SUBSCRIPTION),
+                or(
+                  eq(payment.cancelAtPeriodEnd, false),
+                  isNull(payment.cancelAtPeriodEnd),
+                  gt(payment.periodEnd, new Date())
+                ),
                 or(eq(payment.status, 'active'), eq(payment.status, 'trialing'))
               )
             )

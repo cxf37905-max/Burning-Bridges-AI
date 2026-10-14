@@ -1,6 +1,6 @@
 import { automaticCreditGrantsEnabled } from './policy';
 import { randomUUID } from 'crypto';
-import { findPaymentPriceKey, websiteConfig } from '@/config/website';
+import { websiteConfig } from '@/config/website';
 import { getDb } from '@/db';
 import { creditTransaction, payment, user, userCredit } from '@/db/schema';
 import {
@@ -8,10 +8,10 @@ import {
   findPlanByPriceId,
   getAllPricePlans,
 } from '@/lib/price-plan';
-import { PlanIntervals } from '@/payment/types';
+import { PaymentTypes, PlanIntervals } from '@/payment/types';
 import { addDays } from 'date-fns';
 import { and, eq, gt, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
-import { canAddCreditsByType } from './credits';
+import { applyRecordedPaymentRefund, canAddCreditsByType } from './credits';
 import { CREDIT_TRANSACTION_TYPE } from './types';
 
 type MonthlyCreditRecipient = {
@@ -29,16 +29,14 @@ async function isLinkedPaymentActive(
   priceId: string,
   paymentId?: string
 ) {
-  if (findPaymentPriceKey(priceId)?.provider === 'waffo') {
-    const credits = findPlanByPriceId(priceId)?.credits;
-    if (
-      !websiteConfig.credits.enableCredits ||
-      !credits?.enable ||
-      !Number.isInteger(credits.amount) ||
-      credits.amount <= 0
-    )
-      return false;
-  }
+  const credits = findPlanByPriceId(priceId)?.credits;
+  if (
+    !websiteConfig.credits.enableCredits ||
+    !credits?.enable ||
+    !Number.isInteger(credits.amount) ||
+    credits.amount <= 0
+  )
+    return false;
   if (!paymentId) return true;
   // 与退款回调共用用户锁，防止先查询到付费状态、退款后又按旧快照发积分。
   const records = await tx
@@ -50,7 +48,13 @@ async function isLinkedPaymentActive(
         eq(payment.priceId, priceId),
         eq(payment.invoiceId, paymentId),
         eq(payment.paid, true),
-        or(eq(payment.status, 'active'), eq(payment.status, 'completed'))
+        or(eq(payment.status, 'active'), eq(payment.status, 'completed')),
+        or(
+          eq(payment.type, PaymentTypes.ONE_TIME),
+          eq(payment.cancelAtPeriodEnd, false),
+          isNull(payment.cancelAtPeriodEnd),
+          gt(payment.periodEnd, new Date())
+        )
       )
     )
     .limit(1);
@@ -90,13 +94,21 @@ export async function distributeCreditsToAllUsers() {
     })
     .from(payment)
     .where(
-      or(
-        // Active subscriptions
-        and(eq(payment.status, 'active'), eq(payment.paid, true)),
-        // Trial subscriptions
-        and(eq(payment.status, 'trialing'), eq(payment.paid, true)),
-        // Completed lifetime payments
-        and(eq(payment.status, 'completed'), eq(payment.paid, true))
+      and(
+        or(
+          // Active subscriptions
+          and(eq(payment.status, 'active'), eq(payment.paid, true)),
+          // Trial subscriptions
+          and(eq(payment.status, 'trialing'), eq(payment.paid, true)),
+          // Completed lifetime payments
+          and(eq(payment.status, 'completed'), eq(payment.paid, true))
+        ),
+        or(
+          eq(payment.type, PaymentTypes.ONE_TIME),
+          eq(payment.cancelAtPeriodEnd, false),
+          isNull(payment.cancelAtPeriodEnd),
+          gt(payment.periodEnd, new Date())
+        )
       )
     )
     .as('latest_payment');
@@ -143,11 +155,8 @@ export async function distributeCreditsToAllUsers() {
         userRecord.paymentStatus === 'trialing' ||
         userRecord.paymentStatus === 'completed')
     ) {
-      // Waffo 的月度积分保留原付款关联，其他支付商沿用原有参数和行为。
-      const paymentId =
-        findPaymentPriceKey(userRecord.priceId)?.provider === 'waffo'
-          ? (userRecord.paymentInvoiceId ?? undefined)
-          : undefined;
+      // 所有支付商的年付、终身月度积分均关联原付款，便于精确退款。
+      const paymentId = userRecord.paymentInvoiceId ?? undefined;
       // User has valid payment - check what type
       const pricePlan = findPlanByPriceId(userRecord.priceId);
       if (pricePlan?.isLifetime && pricePlan?.credits?.enable) {
@@ -546,6 +555,10 @@ export async function batchAddLifetimeMonthlyCredits(
             .where(eq(userCredit.userId, userId));
         }
       }
+      for (const userId of eligibleUserIds) {
+        const paymentId = paymentIds.get(userId);
+        if (paymentId) await applyRecordedPaymentRefund(tx, userId, paymentId);
+      }
     });
 
     totalProcessedCount += processedCount;
@@ -713,6 +726,10 @@ export async function batchAddYearlyUsersMonthlyCredits(
             })
             .where(eq(userCredit.userId, userId));
         }
+      }
+      for (const userId of eligibleUserIds) {
+        const paymentId = paymentIds.get(userId);
+        if (paymentId) await applyRecordedPaymentRefund(tx, userId, paymentId);
       }
     });
 

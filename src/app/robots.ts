@@ -6,7 +6,19 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/api/', '/settings/', '/dashboard/', '/library', '/sign-in', '/auth/'],
+      disallow: [
+        '/api/',
+        '/settings/',
+        '/dashboard',
+        '/library',
+        '/sign-in',
+        '/auth/',
+        '/en/settings/',
+        '/en/dashboard',
+        '/en/library',
+        '/en/sign-in',
+        '/en/auth/',
+      ],
     },
     sitemap: `${studioBrand.url}/sitemap.xml`,
   };

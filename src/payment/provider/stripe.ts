@@ -1,9 +1,13 @@
 import { randomUUID } from 'crypto';
-import { websiteConfig } from '@/config/website';
+import { findPaymentPriceKey, websiteConfig } from '@/config/website';
 import {
   addCredits,
   addLifetimeMonthlyCredits,
   addSubscriptionCredits,
+  confirmRefundSubscriptionCancellation,
+  isPaymentFullyRefunded,
+  settlePaymentRefund,
+  type CreditDatabaseTransaction,
 } from '@/credits/credits';
 import { getCreditPackageById } from '@/credits/server';
 import { CREDIT_TRANSACTION_TYPE } from '@/credits/types';
@@ -16,7 +20,7 @@ import {
 } from '@/lib/constants';
 import { findPlanByPlanId, findPriceInPlan } from '@/lib/price-plan';
 import { sendPaymentNotification } from '@/notification';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { Stripe } from 'stripe';
 import {
   type CheckoutResult,
@@ -443,8 +447,22 @@ export class StripeProvider implements PaymentProvider {
       const eventType = event.type;
       console.log(`handle webhook event, type: ${eventType}`);
 
-      // Handle subscription events
-      if (eventType.startsWith('customer.subscription.')) {
+      if (eventType === 'refund.created' || eventType === 'refund.updated') {
+        const refund = await this.stripe.refunds.retrieve(
+          (event.data.object as Stripe.Refund).id
+        );
+        if (refund.status === 'succeeded')
+          await this.settleStripeRefund(refund);
+      } else if (eventType === 'charge.refunded') {
+        const charge = event.data.object as Stripe.Charge;
+        for await (const refund of this.stripe.refunds.list({
+          charge: charge.id,
+          limit: 100,
+        })) {
+          if (refund.status === 'succeeded')
+            await this.settleStripeRefund(refund);
+        }
+      } else if (eventType.startsWith('customer.subscription.')) {
         const stripeSubscription = event.data.object as Stripe.Subscription;
 
         // Process based on subscription status and event type
@@ -482,6 +500,73 @@ export class StripeProvider implements PaymentProvider {
       console.error('handle webhook event error:', error);
       throw new Error('Failed to handle webhook event');
     }
+  }
+
+  private async settleStripeRefund(refund: Stripe.Refund) {
+    const chargeId =
+      typeof refund.charge === 'string' ? refund.charge : refund.charge?.id;
+    if (!chargeId) throw new Error(`Stripe 退款缺少原扣款：${refund.id}`);
+    const charge = await this.stripe.charges.retrieve(chargeId);
+    const invoiceId =
+      typeof charge.invoice === 'string' ? charge.invoice : charge.invoice?.id;
+    if (!invoiceId)
+      throw new Error(`Stripe 退款缺少站内账单关联：${refund.id}`);
+    const invoice = await this.stripe.invoices.retrieve(invoiceId);
+    const record = await this.findPaymentRecord(invoice);
+    const customerId =
+      typeof charge.customer === 'string'
+        ? charge.customer
+        : charge.customer?.id;
+    if (
+      !record ||
+      record.customerId !== customerId ||
+      findPaymentPriceKey(record.priceId)?.provider !== 'stripe' ||
+      refund.currency !== charge.currency
+    ) {
+      throw new Error(`Stripe 退款与站内付款不符：${refund.id}/${invoiceId}`);
+    }
+    const subscription = record.subscriptionId
+      ? await this.stripe.subscriptions.retrieve(record.subscriptionId)
+      : null;
+    let totalRefunded = 0;
+    for await (const item of this.stripe.refunds.list({
+      charge: chargeId,
+      limit: 100,
+    })) {
+      if (item.status === 'succeeded') totalRefunded += item.amount;
+    }
+    const latestPaymentId =
+      typeof subscription?.latest_invoice === 'string'
+        ? subscription.latest_invoice
+        : subscription?.latest_invoice?.id;
+    await settlePaymentRefund({
+      provider: 'stripe',
+      refundId: refund.id,
+      record,
+      paymentId: invoiceId,
+      originalAmount: charge.amount,
+      refundedAmount: refund.amount,
+      fullRefund: totalRefunded >= charge.amount,
+      latestPaymentId,
+    });
+    // 防重只限制积分扣减，取消失败必须抛出，让同一回调重试平台操作。
+    if (
+      subscription &&
+      !['canceled', 'incomplete_expired'].includes(subscription.status) &&
+      !subscription.cancel_at_period_end
+    ) {
+      const canceled = await this.stripe.subscriptions.update(
+        subscription.id,
+        { cancel_at_period_end: true },
+        { idempotencyKey: `refund-cancel-${refund.id}` }
+      );
+      if (
+        canceled.id !== subscription.id ||
+        (!canceled.cancel_at_period_end && canceled.status !== 'canceled')
+      )
+        throw new Error(`Stripe 未确认停止订阅续费：${subscription.id}`);
+    }
+    if (subscription) await confirmRefundSubscriptionCancellation(record);
   }
 
   private async findPaymentRecord(
@@ -595,6 +680,8 @@ export class StripeProvider implements PaymentProvider {
         console.error('<< Payment record not found for invoice:', invoice.id);
         throw new Error(`Payment record not found for invoice: ${invoice.id}`);
       }
+      if (await isPaymentFullyRefunded(paymentRecord.userId, invoice.id))
+        return;
 
       // Determine payment type based on existing payment record type
       // This is more reliable than checking invoice.subscription field
@@ -671,21 +758,19 @@ export class StripeProvider implements PaymentProvider {
         return;
       }
 
-      // Get userId from subscription metadata or fallback to customerId lookup
-      let userId: string | undefined = subscription.metadata.userId;
-
-      // If no userId in metadata (common in renewals), find by customerId
-      if (!userId) {
-        console.log('No userId in metadata, finding by customerId');
-        userId = await this.findUserIdByCustomerId(customerId);
-
-        if (!userId) {
-          console.error('<< No userId found, this should not happen');
-          return;
-        }
-      }
+      // 以原付款关联用户为准，切换支付商后不依赖可能已更新的用户 customerId。
+      const userId = paymentRecord.userId;
+      if (
+        customerId !== paymentRecord.customerId ||
+        (subscription.metadata.userId &&
+          subscription.metadata.userId !== userId)
+      )
+        throw new Error(`Stripe 订阅与站内用户不符：${subscriptionId}`);
 
       const periodStart = this.getPeriodStart(subscription);
+      const grantDate = new Date(
+        (invoice.lines.data[0]?.period.start ?? invoice.period_start) * 1000
+      );
       const periodEnd = this.getPeriodEnd(subscription);
       const trialStart = subscription.trial_start
         ? new Date(subscription.trial_start * 1000)
@@ -697,30 +782,52 @@ export class StripeProvider implements PaymentProvider {
 
       // Update payment record with all subscription details
       const db = await getDb();
-      await db
-        .update(payment)
-        .set({
-          // invoiceId: invoice.id, // do not update invoiceId
-          paid: true, // Mark as paid
-          interval: this.mapStripeIntervalToPlanInterval(subscription),
-          status: this.mapSubscriptionStatusToPaymentStatus(
-            subscription.status
-          ),
-          periodStart,
-          periodEnd,
-          cancelAtPeriodEnd: subscription.cancel_at_period_end,
-          trialStart,
-          trialEnd,
-          updatedAt: currentDate,
-        })
-        .where(eq(payment.id, paymentRecord.id));
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${paymentRecord.userId}, 0))`
+        );
+        if (await isPaymentFullyRefunded(paymentRecord.userId, invoice.id, tx))
+          return;
+        const [current] = await tx
+          .select()
+          .from(payment)
+          .where(eq(payment.id, paymentRecord.id))
+          .limit(1);
+        if (!current)
+          throw new Error(`Stripe 入账时找不到付款：${paymentRecord.id}`);
+        const latestInvoiceId =
+          typeof subscription.latest_invoice === 'string'
+            ? subscription.latest_invoice
+            : subscription.latest_invoice?.id;
+        if (!latestInvoiceId || latestInvoiceId === invoice.id)
+          await tx
+            .update(payment)
+            .set({
+              invoiceId: invoice.id,
+              paid: true, // Mark as paid
+              interval: this.mapStripeIntervalToPlanInterval(subscription),
+              status: this.mapSubscriptionStatusToPaymentStatus(
+                subscription.status
+              ),
+              periodStart,
+              periodEnd,
+              cancelAtPeriodEnd:
+                subscription.cancel_at_period_end || current.cancelAtPeriodEnd,
+              trialStart,
+              trialEnd,
+              updatedAt: currentDate,
+            })
+            .where(eq(payment.id, paymentRecord.id));
 
-      // Process subscription benefits
-      await this.processSubscriptionPurchase(
-        userId,
-        priceId,
-        periodStart ?? new Date()
-      );
+        // Process subscription benefits
+        await this.processSubscriptionPurchase(
+          userId,
+          priceId,
+          grantDate,
+          invoice.id,
+          tx
+        );
+      });
     } catch (error) {
       console.error('<< Update subscription payment error:', error);
       throw error;
@@ -737,12 +844,20 @@ export class StripeProvider implements PaymentProvider {
   private async processSubscriptionPurchase(
     userId: string,
     priceId: string,
-    grantDate: Date
+    grantDate: Date,
+    paymentId: string,
+    transaction: CreditDatabaseTransaction
   ): Promise<void> {
     console.log('>> Process subscription purchase');
 
     if (websiteConfig.credits?.enableCredits) {
-      await addSubscriptionCredits(userId, priceId, grantDate);
+      await addSubscriptionCredits(
+        userId,
+        priceId,
+        grantDate,
+        paymentId,
+        transaction
+      );
       console.log('Added subscription credits for user:', userId);
     }
 
@@ -768,32 +883,44 @@ export class StripeProvider implements PaymentProvider {
     try {
       // Update payment record with invoice details
       const db = await getDb();
-      await db
-        .update(payment)
-        .set({
-          // invoiceId: invoice.id, // do not update invoiceId
-          status: 'completed', // One-time payments are completed when invoice is paid
-          paid: true, // Mark as paid
-          updatedAt: new Date(),
-        })
-        .where(eq(payment.id, paymentRecord.id));
-
-      // Process benefits based on payment type
-      if (paymentRecord.sessionId) {
-        const session = await this.stripe.checkout.sessions.retrieve(
-          paymentRecord.sessionId
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${paymentRecord.userId}, 0))`
         );
-        const metadata = session.metadata || {};
-        const isCreditPurchase = metadata.type === 'credit_purchase';
+        if (await isPaymentFullyRefunded(paymentRecord.userId, invoice.id, tx))
+          return;
+        await tx
+          .update(payment)
+          .set({
+            invoiceId: invoice.id,
+            status: 'completed', // One-time payments are completed when invoice is paid
+            paid: true, // Mark as paid
+            updatedAt: new Date(),
+          })
+          .where(eq(payment.id, paymentRecord.id));
 
-        if (isCreditPurchase) {
-          // Process credit purchase
-          await this.processCreditPurchase(invoice, paymentRecord, metadata);
-        } else {
-          // Process lifetime plan purchase
-          await this.processLifetimePlanPurchase(invoice, paymentRecord);
+        // Process benefits based on payment type
+        if (paymentRecord.sessionId) {
+          const session = await this.stripe.checkout.sessions.retrieve(
+            paymentRecord.sessionId
+          );
+          const metadata = session.metadata || {};
+          const isCreditPurchase = metadata.type === 'credit_purchase';
+
+          if (isCreditPurchase) {
+            // Process credit purchase
+            await this.processCreditPurchase(
+              invoice,
+              paymentRecord,
+              metadata,
+              tx
+            );
+          } else {
+            // Process lifetime plan purchase
+            await this.processLifetimePlanPurchase(invoice, paymentRecord, tx);
+          }
         }
-      }
+      });
     } catch (error) {
       console.error('<< Update one-time payment error:', error);
       throw error;
@@ -811,7 +938,8 @@ export class StripeProvider implements PaymentProvider {
   private async processCreditPurchase(
     invoice: Stripe.Invoice,
     paymentRecord: Payment,
-    metadata: { [key: string]: string }
+    metadata: { [key: string]: string },
+    transaction: CreditDatabaseTransaction
   ): Promise<void> {
     console.log('>> Process credit purchase');
 
@@ -836,6 +964,7 @@ export class StripeProvider implements PaymentProvider {
       type: CREDIT_TRANSACTION_TYPE.PURCHASE_PACKAGE,
       description: `+${credits} credits for package ${packageId} ($${amount.toLocaleString()})`,
       paymentId: invoice.id,
+      transaction,
       idempotencyKey: `payment:stripe:${invoice.id}`,
       expireDays: creditPackage.expireDays,
     });
@@ -850,7 +979,8 @@ export class StripeProvider implements PaymentProvider {
    */
   private async processLifetimePlanPurchase(
     invoice: Stripe.Invoice,
-    paymentRecord: Payment
+    paymentRecord: Payment,
+    transaction: CreditDatabaseTransaction
   ): Promise<void> {
     console.log('>> Process lifetime plan purchase');
 
@@ -858,7 +988,10 @@ export class StripeProvider implements PaymentProvider {
     if (websiteConfig.credits?.enableCredits) {
       await addLifetimeMonthlyCredits(
         paymentRecord.userId,
-        paymentRecord.priceId
+        paymentRecord.priceId,
+        new Date(),
+        invoice.id,
+        transaction
       );
       console.log('Added lifetime credits for user:', paymentRecord.userId);
     }
@@ -903,6 +1036,9 @@ export class StripeProvider implements PaymentProvider {
   private async onUpdateSubscription(
     stripeSubscription: Stripe.Subscription
   ): Promise<void> {
+    stripeSubscription = await this.stripe.subscriptions.retrieve(
+      stripeSubscription.id
+    );
     console.log('>> Handle subscription update:', stripeSubscription.id);
 
     // get priceId from subscription items (this is always available)

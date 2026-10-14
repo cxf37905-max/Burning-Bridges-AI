@@ -1,8 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { useRouter } from 'next/navigation';
+import { transitionRoute } from '@/components/layout/route-transitions';
+import { paymentProviderLabel } from '@/config/website';
 import { useVideoCheckout } from './use-video-checkout';
 import { Check, LoaderCircle, LockKeyhole } from 'lucide-react';
 import {
@@ -115,7 +117,7 @@ export function CreditPackDialog({
           {busy ? 'Opening checkout…' : `Pay ${formatPrice(pack.cents)}`}
         </button>
         <p className="bb-credit-footer">
-          One-time payment, no subscription. Secure checkout by Waffo.{' '}
+          One-time payment, no subscription. Secure checkout by {paymentProviderLabel}.{' '}
           <Link
             href="/pricing"
             aria-disabled={busy}
@@ -133,7 +135,8 @@ export function CreditPackDialog({
               try {
                 await beforeCheckout();
                 onOpenChange(false);
-                router.push('/pricing');
+                if (!transitionRoute(() => router.push('/pricing')))
+                  router.push('/pricing');
               } catch (reason) {
                 setError(
                   reason instanceof Error

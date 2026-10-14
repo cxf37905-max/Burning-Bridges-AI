@@ -1,3 +1,4 @@
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { ArrowUpRight } from 'lucide-react';
 import { VideoMotionGuide } from './video-motion-guide';
 import { VideoHowTo } from './video-how-to';
@@ -29,7 +30,7 @@ export function StudioLanding({
             Burning Bridges AI <span>Video Generator</span>
           </h1>
           <p className="bb-hero-description">
-            Upload one photo and turn it into a 20-second Burning Bridges AI
+            Upload one photo and turn it into a 15-second Burning Bridges AI
             video inspired by the viral Drake trend. No filming, editing, or
             prompts.
           </p>
@@ -69,11 +70,11 @@ export function StudioLanding({
             Burning Bridges trend.
           </p>
           <p className="bb-final-specs">
-            One photo · 20-second video · HD 720p
+            One photo · 15-second video · HD 720p
           </p>
-          <a className="bb-button" href="#create">
+          <Link className="bb-button" href="#create">
             Make my video <ArrowUpRight size={18} />
-          </a>
+          </Link>
           <p>No filming. No editing. No prompt required.</p>
         </div>
       </section>

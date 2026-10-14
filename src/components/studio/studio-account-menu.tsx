@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,

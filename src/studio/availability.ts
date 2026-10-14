@@ -15,15 +15,27 @@ export function getStudioAvailability() {
       (process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID) &&
         (process.env.GOOGLE_CLIENT_SECRET || process.env.AUTH_GOOGLE_SECRET)
     );
-  const paymentReady = Boolean(
-    websiteConfig.payment.provider === 'waffo' &&
-      process.env.WAFFO_PRIVATE_KEY &&
+  const paymentCredentials = {
+    stripe: process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET,
+    creem: process.env.CREEM_API_KEY && process.env.CREEM_WEBHOOK_SECRET,
+    paypal: process.env.PAYPAL_CLIENT_ID &&
+      process.env.PAYPAL_CLIENT_SECRET &&
+      process.env.PAYPAL_WEBHOOK_ID,
+    waffo: process.env.WAFFO_PRIVATE_KEY &&
       process.env.WAFFO_MERCHANT_ID &&
       process.env.WAFFO_STORE_ID &&
-      [undefined, 'true', 'false'].includes(process.env.WAFFO_DEBUG) &&
-      Object.values(websiteConfig.credits.packages).every(
-        (pack) => pack.price.priceId
-      )
+      [undefined, 'true', 'false'].includes(process.env.WAFFO_DEBUG),
+    dodo: process.env.DODO_PAYMENTS_API_KEY &&
+      process.env.DODO_PAYMENTS_WEBHOOK_KEY &&
+      [undefined, 'true', 'false'].includes(process.env.DODO_DEBUG),
+  };
+  const productIds = Object.values(websiteConfig.credits.packages).map(
+    (pack) => pack.price.priceId
+  );
+  const paymentReady = Boolean(
+    paymentCredentials[websiteConfig.payment.provider] &&
+      productIds.length > 0 && productIds.every(Boolean) &&
+      new Set(productIds).size === productIds.length
   );
   // 上线开关用于在真实样片、计费和政策完成验证后开放付费服务。
   const generationReady =
@@ -42,12 +54,15 @@ export function getStudioAvailability() {
         process.env.STORAGE_ACCESS_KEY_ID &&
         process.env.STORAGE_SECRET_ACCESS_KEY
     );
+  const sandboxPayment =
+    (websiteConfig.payment.provider === 'waffo' && process.env.WAFFO_DEBUG === 'true') ||
+    (websiteConfig.payment.provider === 'dodo' && process.env.DODO_DEBUG === 'true');
   return {
     authReady,
     emailReady,
     passwordResetReady,
     googleReady,
     generationReady,
-    purchasesReady: authReady && paymentReady && generationReady,
+    purchasesReady: authReady && paymentReady && (generationReady || sandboxPayment),
   };
 }

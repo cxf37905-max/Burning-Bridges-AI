@@ -2,7 +2,7 @@ import { getDb } from '@/db';
 import { payment } from '@/db/schema';
 import { findPlanByPriceId, getAllPricePlans } from '@/lib/price-plan';
 import { PaymentScenes, PaymentTypes } from '@/payment/types';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, or } from 'drizzle-orm';
 
 /**
  * Check premium access for a specific user ID
@@ -34,6 +34,11 @@ export async function checkPremiumAccess(userId: string): Promise<boolean> {
             // Check for active or trialing subscriptions
             and(
               eq(payment.type, PaymentTypes.SUBSCRIPTION),
+              or(
+                eq(payment.cancelAtPeriodEnd, false),
+                isNull(payment.cancelAtPeriodEnd),
+                gt(payment.periodEnd, new Date())
+              ),
               // eq(payment.scene, PaymentScenes.SUBSCRIPTION),
               or(eq(payment.status, 'active'), eq(payment.status, 'trialing'))
             )

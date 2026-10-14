@@ -8,9 +8,10 @@ import { routing } from './routing';
  * https://github.com/amannn/next-intl/blob/main/examples/example-app-router/src/i18n/navigation.ts
  */
 export const {
-  Link: LocaleLink,
   getPathname: getLocalePathname,
   redirect: localeRedirect,
   usePathname: useLocalePathname,
   useRouter: useLocaleRouter,
 } = createNavigation(routing);
+
+export { LocaleLink } from '@/components/layout/locale-link';

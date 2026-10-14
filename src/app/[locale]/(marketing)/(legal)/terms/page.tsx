@@ -1,6 +1,6 @@
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { studioMetadata } from '@/studio/metadata';
-import { websiteConfig } from '@/config/website';
+import { paymentProviderLegalLabel as paymentProviderLabel, websiteConfig } from '@/config/website';
 import { purchasedCreditValidityMonths } from '@/credits/policy';
 
 export const metadata = studioMetadata({
@@ -8,6 +8,7 @@ export const metadata = studioMetadata({
   description:
     'Burning Bridges AI terms for photo permissions, AI videos, one-time credit purchases, refunds, content standards and privacy.',
   path: '/terms',
+  noIndex: true,
 });
 
 export default function TermsPage() {
@@ -18,7 +19,7 @@ export default function TermsPage() {
         ← Back to Burning Bridges AI
       </Link>
       <h1>Burning Bridges AI terms of service.</h1>
-      <div className="bb-article-meta">Updated October 12, 2026</div>
+      <div className="bb-article-meta">Updated October 14, 2026</div>
       <p>
         These Terms of Service ("Terms") govern your access to and use of
         Burning Bridges AI, including our website at burningbridgesai.cc and the
@@ -64,8 +65,8 @@ export default function TermsPage() {
       <h2>3. The video service</h2>
       <p>
         You upload a photo and select a template. Generation currently costs 100
-        credits at HD 720p and uses a 20-second template with its soundtrack.
-        Generation runs through fal.ai, followed by server-side assembly and
+        credits at HD 720p and uses a 15-second template with its soundtrack.
+        Generation uses Kling O3 Edit through fal.ai, followed by server-side assembly and
         storage. Template previews illustrate the selected motion, not an
         identical outcome guaranteed for your photo. Output is synthetic
         entertainment: it is AI-generated, not real footage of the person
@@ -88,7 +89,12 @@ export default function TermsPage() {
 
       <h2 id="payment-refunds">5. Billing, credit validity and refunds</h2>
       <p>
-        Prices are in US dollars. Waffo processes checkout; review the payment
+        View your purchases and open the payment provider's customer portal from{' '}
+        <Link className="bb-text-link" href="/settings/billing">Billing</Link>{' '}
+        for invoices and payment-related requests.
+      </p>
+      <p>
+        Prices are in US dollars. {paymentProviderLabel} processes checkout; review the payment
         total and any disclosed taxes before paying. Purchased credits are
         credited after we verify successful payment. A checkout redirect alone
         does not confirm payment. Buying credits does not automatically start
@@ -175,14 +181,17 @@ export default function TermsPage() {
         You must not submit material that infringes someone else’s rights.
       </p>
       <p>
-        Our server-uploaded photos are scheduled for deletion approximately 24
-        hours after upload. Finished videos are available for 14 days after
-        creation, then access expires and hourly cleanup removes the files.
-        Outages may delay deletion. Download videos you want to keep before
-        expiry. These periods cover media in our storage, not copies you
-        download or share; task, payment and credit records are separate. File
-        expiry does not return credits. We do not sell your uploaded photos or
-        use them to train our own models. See the{' '}
+        Uploaded photos and finished videos are stored privately. Finished
+        videos are available for 14 days after creation, then access expires.
+        Uploaded photos and per-generation reference files are scheduled for
+        automatic deletion one day after upload. Finished video files are
+        scheduled for deletion 15 days after upload. Storage deletion is
+        asynchronous and may occur later than the scheduled expiry. You can
+        request media deletion by contacting support. Download videos you want
+        to keep before access expires. These periods cover media in our
+        storage, not copies you download or share; task, payment and credit
+        records are separate. File expiry does not return credits. We do not
+        sell your uploaded photos or use them to train our own models. See the{' '}
         <Link className="bb-text-link" href="/privacy">
           Privacy Policy
         </Link>
@@ -363,7 +372,7 @@ export default function TermsPage() {
       <p>
         We rely on hosting, storage, AI and payment providers. Our generation
         integration uses fal.ai and its model providers, media storage uses
-        Cloudflare R2, and checkout uses Waffo. Your relevant information is
+        Cloudflare R2, and checkout uses {paymentProviderLabel}. Your relevant information is
         sent to these providers to fulfill the service. Their applicable terms,
         privacy notices and content restrictions also govern their services.
         Further information is in our{' '}

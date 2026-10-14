@@ -1,3 +1,4 @@
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import Image from 'next/image';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -19,12 +20,6 @@ const moments = [
     title: 'Work the room',
     description:
       'The energy opens up with bigger gestures, movement and reactions around the lead character.',
-  },
-  {
-    image: 'where-she-at',
-    title: 'Finish on the meme moment',
-    description:
-      'The sequence ends with the recognizable hand-over-the-eyes, search-the-room gesture associated with the “where she at?” moment.',
   },
 ];
 
@@ -67,9 +62,9 @@ export function VideoMotionGuide() {
           One photo goes in. A complete Burning Bridges-style AI video comes
           out.
         </p>
-        <a className="bb-button" href="#create">
+        <Link className="bb-button" href="#create">
           Make my video <ArrowUpRight size={16} />
-        </a>
+        </Link>
       </div>
     </section>
   );

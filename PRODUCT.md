@@ -10,7 +10,7 @@ brand
 
 ## Product Purpose
 
-网站域名为 burningbridgesai.cc，品牌名为 Burning Bridges AI。首页围绕核心词，提供首屏照片上传与参考视频、单次视频价格、制作步骤、搜索问题解释与生成入口。支付指定 Waffo；生成使用 fal.ai Kling O3 Edit，分段编辑后拼接为至少20秒720p成片，并加入用户已确认授权的原音轨。
+网站域名为 burningbridgesai.cc，品牌名为 Burning Bridges AI。首页围绕核心词，提供首屏照片上传与参考视频、单次视频价格、制作步骤、搜索问题解释与生成入口。支付指定 Waffo；生成使用 fal.ai Kling O3 Edit，单次生成15秒720p成片，并加入用户已确认授权的原音轨。
 
 ## Brand Personality
 

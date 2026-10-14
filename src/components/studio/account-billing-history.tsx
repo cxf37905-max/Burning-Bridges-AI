@@ -19,10 +19,11 @@ export function AccountBillingHistory({
   return (
     <div className="bb-account-table-scroll">
       <table className="bb-account-table">
-        <caption className="sr-only">Your most recent 100 Waffo orders</caption>
+        <caption className="sr-only">Your most recent 100 orders</caption>
         <thead>
           <tr>
             <th>Date / order</th>
+            <th>Payment provider</th>
             <th>Credits</th>
             <th>Amount</th>
             <th>Status</th>
@@ -39,6 +40,7 @@ export function AccountBillingHistory({
                 </time>
                 <small>{order.id}</small>
               </td>
+              <td>{order.providerLabel}</td>
               <td>{order.videos * videoCreditCost}</td>
               <td>
                 {formatPrice(order.cents)} <small>{order.currency}</small>

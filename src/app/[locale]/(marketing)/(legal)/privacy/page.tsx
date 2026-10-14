@@ -1,12 +1,13 @@
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { studioMetadata } from '@/studio/metadata';
-import { websiteConfig } from '@/config/website';
+import { paymentProviderLegalLabel as paymentProviderLabel, websiteConfig } from '@/config/website';
 
 export const metadata = studioMetadata({
   title: 'Burning Bridges AI Privacy Policy',
   description:
-    'How Burning Bridges AI handles account information, photo uploads, AI videos, Waffo payments, 24-hour photo deletion and 14-day video retention.',
+    `How Burning Bridges AI handles account information, photo uploads, AI videos, ${paymentProviderLabel} payments, media storage and 14-day video access.`,
   path: '/privacy',
+  noIndex: true,
 });
 
 export default function PrivacyPage() {
@@ -20,7 +21,7 @@ export default function PrivacyPage() {
         ← Back to Burning Bridges AI
       </Link>
       <h1>Burning Bridges AI privacy policy.</h1>
-      <div className="bb-article-meta">Updated October 12, 2026</div>
+      <div className="bb-article-meta">Updated October 14, 2026</div>
       <p>
         This Privacy Policy explains how Burning Bridges AI collects, uses and
         shares your information when you use burningbridgesai.cc and its
@@ -66,7 +67,7 @@ export default function PrivacyPage() {
         <li>
           Purchase details: your credit pack, amount, currency, order and
           payment identifiers, payment status and credit transaction history.
-          Waffo handles payment details at checkout. We do not store full card
+          {paymentProviderLabel} handles payment details at checkout. We do not store full card
           numbers.
         </li>
         <li>
@@ -146,11 +147,14 @@ export default function PrivacyPage() {
 
       <h2>5. Storage and retention</h2>
       <p>
-        Photos uploaded to our storage are scheduled for deletion approximately
-        24 hours after upload. Finished videos are available for 14 days after
-        creation. Access ends after 14 days, and the video is scheduled for
-        deletion. Our cleanup runs hourly; an outage may delay file deletion.
-        Download any video you want to keep before it expires.
+        Uploaded photos and finished videos are stored privately. Finished
+        videos are available for 14 days after creation, then access expires.
+        Uploaded photos and per-generation reference files are scheduled for
+        automatic deletion under our storage lifecycle rules one day after
+        upload. Finished video files are scheduled for deletion 15 days after
+        upload, allowing a buffer beyond the download period. Storage deletion
+        is asynchronous and may occur later than the scheduled expiry.
+        Download any video you want to keep before access expires.
       </p>
       <p>
         Our media storage is private. Opening a video through your account
@@ -194,7 +198,7 @@ export default function PrivacyPage() {
         <li>Resend, which delivers account and password-reset emails.</li>
         <li>fal.ai and its model providers, which generate your video.</li>
         <li>
-          Waffo, which processes credit purchases and payment status updates.
+          {paymentProviderLabel}, which processes credit purchases and payment status updates.
         </li>
         <li>
           Professional advisers or authorities when needed to meet legal

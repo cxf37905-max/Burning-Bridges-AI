@@ -8,8 +8,6 @@ export const mediaUrl = z.url().refine((value) => {
 export const falEndpoints = [
   'fal-ai/kling-video/o3/standard/video-to-video/edit',
   'fal-ai/kling-video/o3/pro/video-to-video/edit',
-  'fal-ai/ffmpeg-api/merge-videos',
-  'fal-ai/ffmpeg-api/merge-audio-video',
 ] as const;
 export type FalEndpoint = (typeof falEndpoints)[number];
 

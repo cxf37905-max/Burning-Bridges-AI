@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { websiteConfig } from '@/config/website';
+import { RouteLink as Link } from '@/components/layout/locale-link';
+import { paymentProviderLabel, websiteConfig } from '@/config/website';
 import { purchasedCreditValidityMonths } from '@/credits/policy';
 
 export function VideoPricingDetails() {
@@ -9,7 +9,7 @@ export function VideoPricingDetails() {
     <div className="bb-pricing-details">
       <p>
         All prices are in USD. Review your final total, including any applicable
-        taxes, at checkout. Payments are processed by Waffo.
+        taxes, at checkout. Payments are processed by {paymentProviderLabel}.
       </p>
       <p>
         One-time payments only. Nothing renews. Purchases are final: unused or

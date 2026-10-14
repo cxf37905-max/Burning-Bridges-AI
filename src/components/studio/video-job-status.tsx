@@ -5,33 +5,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { creditsKeys } from '@/hooks/use-credits';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
-import { z } from 'zod';
 import dynamic from 'next/dynamic';
-import { Skeleton } from '@/components/ui/skeleton';
+import { publicVideoJobSchema, type PublicVideoJob } from '@/studio/video-job-contract';
+import { VideoPlayerPlaceholder } from './video-player-placeholder';
 import { VideoGenerationState } from './video-generation-state';
 
 const StudioVideoPlayer = dynamic(
   () => import('./studio-video-player').then((module) => module.StudioVideoPlayer),
   {
     ssr: false,
-    loading: () => (
-      <Skeleton
-        className="bb-video-player-loading"
-        aria-label="Loading video player"
-      />
-    ),
+    loading: VideoPlayerPlaceholder,
   }
 );
-
-const videoJob = z.object({
-  id: z.string(),
-  status: z.enum(['reserved', 'processing', 'succeeded', 'failed']),
-  videoUrl: z.url().nullable(),
-  message: z.string().nullable(),
-  refunded: z.boolean(),
-  expired: z.boolean(),
-  expiresAt: z.iso.datetime().nullable(),
-});
 
 async function fetchVideoJob(url: string) {
   const response = await fetch(url, { cache: 'no-store' });
@@ -39,23 +24,29 @@ async function fetchVideoJob(url: string) {
     throw new Error(
       'We could not check this video. Try again, or return to your library.'
     );
-  return videoJob.parse(await response.json());
+  return publicVideoJobSchema.parse(await response.json());
 }
 
 export function VideoJobStatus({
   id,
   appearance = 'library',
+  initialJob,
+  checkingStatus = false,
 }: {
   id: string;
   appearance?: 'studio' | 'library';
+  initialJob?: PublicVideoJob;
+  checkingStatus?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   const {
     data: job,
     error,
     mutate,
   } = useSWR(`/api/studio/videos/${id}`, fetchVideoJob, {
+    fallbackData: initialJob?.id === id ? initialJob : undefined,
     refreshInterval: (latest) =>
       latest && ['succeeded', 'failed'].includes(latest.status) ? 0 : 8_000,
     shouldRetryOnError: true,
@@ -71,8 +62,9 @@ export function VideoJobStatus({
   async function downloadVideo() {
     if (!job?.videoUrl || downloading) return;
     setDownloading(true);
+    setDownloadError('');
     try {
-      const response = await fetch(job.videoUrl);
+      const response = await fetch(`/api/studio/videos/${id}/file?download=1`);
       if (!response.ok)
         throw new Error(`Video download failed: ${response.status}`);
       const url = URL.createObjectURL(await response.blob());
@@ -82,17 +74,18 @@ export function VideoJobStatus({
       document.body.append(link);
       link.click();
       link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch {
-      // 跨域下载受限时，保留浏览器直接打开成片的入口。
-      window.open(job.videoUrl, '_blank', 'noopener,noreferrer');
+      setDownloadError('Your video could not be downloaded. Please try again.');
     } finally {
       setDownloading(false);
     }
   }
   return (
     <div className="bb-job-status" aria-live="polite">
-      {!job || ['reserved', 'processing'].includes(job.status) ? (
+      {!job || (checkingStatus && ['reserved', 'processing'].includes(job.status)) ? (
+        <VideoPlayerPlaceholder />
+      ) : ['reserved', 'processing'].includes(job.status) ? (
         <VideoGenerationState
           starting={job?.status === 'reserved'}
           studio={appearance === 'studio'}
@@ -127,6 +120,7 @@ export function VideoJobStatus({
             {downloading ? 'Downloading…' : 'Download video'}{' '}
             <Download size={14} />
           </button>
+          {downloadError && <p role="alert">{downloadError}</p>}
           <small>
             Available for 14 days. Download your video before it expires.
           </small>

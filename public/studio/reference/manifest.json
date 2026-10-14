@@ -3,46 +3,11 @@
   "authorization": "用户已确认原视频和音频的使用授权。",
   "assets": [
     {
-      "filename": "burning-bridges-ai-video.mp4",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ai-video.mp4",
-      "bytes": 1910693,
-      "sha256": "c9eb67a425b284a73d321394c5ea4543b9f07c7cd696d47457f35782523a6367",
-      "contentType": "video/mp4"
-    },
-    {
       "filename": "burning-bridges-ai-video.jpg",
       "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ai-video.jpg",
       "bytes": 61712,
       "sha256": "1965450c1a9d265e3b06abdb71306f3b68921eb0e100f316ca8cd99d2479cb7e",
       "contentType": "image/jpeg"
-    },
-    {
-      "filename": "burning-bridges-ref-1.mp4",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ref-1.mp4",
-      "bytes": 5766888,
-      "sha256": "49095314f4f2e5a43a636324798978c6b88885b9e5945eb30493091ba3df1fc9",
-      "contentType": "video/mp4"
-    },
-    {
-      "filename": "burning-bridges-ref-2.mp4",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ref-2.mp4",
-      "bytes": 3279370,
-      "sha256": "dda7942cb3445c56c03084627591e8cc3d5cc92d016984b0bf73647af6f47767",
-      "contentType": "video/mp4"
-    },
-    {
-      "filename": "burning-bridges-ref-audio.m4a",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-ref-audio.m4a",
-      "bytes": 488204,
-      "sha256": "9dff5a90c683e744cc691ced71d6ab6b5ee3acb46d0dd4e3fdfd0af44a7f876e",
-      "contentType": "audio/mp4"
-    },
-    {
-      "filename": "burning-bridges-after-party.mp4",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party.mp4",
-      "bytes": 4669177,
-      "sha256": "413e8ff28fe52c6579ad3852f87815b30601cb49a5d8b160fec19b9b43bd7dc8",
-      "contentType": "video/mp4"
     },
     {
       "filename": "burning-bridges-after-party.jpg",
@@ -52,53 +17,74 @@
       "contentType": "image/jpeg"
     },
     {
-      "filename": "burning-bridges-after-party-ref-1.mp4",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party-ref-1.mp4",
-      "bytes": 3664233,
-      "sha256": "626e9d5b4eaa10597242fd88d8660d2221224418dc2c56604fd25696729e2eaf",
-      "contentType": "video/mp4"
-    },
-    {
-      "filename": "burning-bridges-after-party-ref-2.mp4",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party-ref-2.mp4",
-      "bytes": 1867163,
-      "sha256": "851a6535e7e91cbf36793e7c3ed51e0bf5df923d02a4001c4cd4c1f30da9b87a",
-      "contentType": "video/mp4"
-    },
-    {
-      "filename": "burning-bridges-after-party-ref-audio.m4a",
-      "sourceUrl": "https://burningbridgesai.app/videos/burning-bridges-after-party-ref-audio.m4a",
-      "bytes": 501989,
-      "sha256": "69755b99e38e7258deb486eb83a7cffb6b2280469dcc85fc87d77163f78a0031",
-      "contentType": "audio/mp4"
-    },
-    {
-      "filename": "burning-bridges-ref-2-overlap.mp4",
-      "generatedAt": "2026-10-13T06:47:56.867Z",
-      "bytes": 3702126,
-      "sha256": "678926514e521a0f7f890b3c16e7a3e81cff1a40c4fafb0811d27fbf1d6d20ab",
-      "contentType": "video/mp4",
-      "overlapFrames": 24,
-      "fps": 24,
+      "filename": "burning-bridges-ref-15s.mp4",
+      "bytes": 7186577,
+      "sha256": "0f2772619f7a66a9ee38d16056d874e9d656a0b2dd151b3a1fe362422ce3d51c",
       "derivedFrom": [
         "burning-bridges-ref-1.mp4",
         "burning-bridges-ref-2.mp4"
       ],
-      "description": "第一段末尾24帧加完整第二段；只用于带重叠的新任务。"
+      "derivation": "完整参考前15秒，无音轨",
+      "seconds": 15,
+      "generatedAt": "2026-10-13T23:18:15.749204+08:00"
     },
     {
-      "filename": "burning-bridges-after-party-ref-2-overlap.mp4",
-      "generatedAt": "2026-10-13T06:47:58.267Z",
-      "bytes": 2147956,
-      "sha256": "48176e184ff72ce6f67006bbc50f780027789c03b3161d72147d2c011d6ba67d",
-      "contentType": "video/mp4",
-      "overlapFrames": 24,
-      "fps": 24,
+      "filename": "burning-bridges-ref-15s-audio.m4a",
+      "bytes": 365876,
+      "sha256": "50e99b530a1d6f1e3f1e16cf4a20910640249990d363ddac80dcaf653ab61247",
+      "derivedFrom": [
+        "burning-bridges-ref-audio.m4a"
+      ],
+      "derivation": "原音轨前15秒",
+      "seconds": 15,
+      "generatedAt": "2026-10-13T23:18:15.751217+08:00"
+    },
+    {
+      "filename": "burning-bridges-ai-video-15s.mp4",
+      "bytes": 7555403,
+      "sha256": "df3bf5e4e13bb158a77c79cae812d3073b4f4fdda9eb77c77850d29893ecfaa3",
+      "derivedFrom": [
+        "burning-bridges-ref-15s.mp4",
+        "burning-bridges-ref-15s-audio.m4a"
+      ],
+      "derivation": "首页前15秒预览，带原音轨",
+      "seconds": 15,
+      "generatedAt": "2026-10-13T23:18:15.757855+08:00"
+    },
+    {
+      "filename": "burning-bridges-after-party-ref-15s.mp4",
+      "bytes": 4505807,
+      "sha256": "f2e5e3fb853b3170c41fbfa2a6ac7da027cea84b4f04dac384ada2376d81ea3a",
       "derivedFrom": [
         "burning-bridges-after-party-ref-1.mp4",
         "burning-bridges-after-party-ref-2.mp4"
       ],
-      "description": "第一段末尾24帧加完整第二段；只用于带重叠的新任务。"
+      "derivation": "完整参考前15秒，无音轨",
+      "seconds": 15,
+      "generatedAt": "2026-10-13T23:18:21.713998+08:00"
+    },
+    {
+      "filename": "burning-bridges-after-party-ref-15s-audio.m4a",
+      "bytes": 376974,
+      "sha256": "3f116288ab3b8983449dd5f04d284c6d907c2bbb765b82552b8e3eb08ad81087",
+      "derivedFrom": [
+        "burning-bridges-after-party-ref-audio.m4a"
+      ],
+      "derivation": "原音轨前15秒",
+      "seconds": 15,
+      "generatedAt": "2026-10-13T23:18:21.715007+08:00"
+    },
+    {
+      "filename": "burning-bridges-after-party-15s.mp4",
+      "bytes": 4887131,
+      "sha256": "1090e7df5b27301e944234747161e59a3ae0a6197064f62c1818d3b46a6b04d0",
+      "derivedFrom": [
+        "burning-bridges-after-party-ref-15s.mp4",
+        "burning-bridges-after-party-ref-15s-audio.m4a"
+      ],
+      "derivation": "首页前15秒预览，带原音轨",
+      "seconds": 15,
+      "generatedAt": "2026-10-13T23:18:21.718587+08:00"
     }
   ]
 }

@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import { RouteLink as Link } from '@/components/layout/locale-link';
 import { usePathname } from 'next/navigation';
 import {
   Film,

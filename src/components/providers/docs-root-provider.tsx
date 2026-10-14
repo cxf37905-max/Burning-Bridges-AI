@@ -1,12 +1,22 @@
 'use client';
 
 import { websiteConfig } from '@/config/website';
+import { RouteLink } from '@/components/layout/locale-link';
 import type { Translations } from 'fumadocs-ui/i18n';
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useParams } from 'next/navigation';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
+
+function DocsTransitionLink({
+  href = '',
+  ...props
+}: ComponentProps<'a'> & { prefetch?: boolean }) {
+  return <RouteLink href={href} {...props} />;
+}
+
+const frameworkComponents = { Link: DocsTransitionLink };
 
 /**
  * Wraps Fumadocs RootProvider (Shiki, MDX components context).
@@ -36,7 +46,11 @@ export function DocsRootProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <RootProvider theme={theme} i18n={{ locale, locales, translations }}>
+    <RootProvider
+      components={frameworkComponents}
+      theme={theme}
+      i18n={{ locale, locales, translations }}
+    >
       {children}
     </RootProvider>
   );
