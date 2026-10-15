@@ -38,10 +38,36 @@ export function VideoPreview({
   const scene = partyScenes.find((scene) => scene.id === sceneId)!;
   const [unavailable, setUnavailable] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
+  const referenceRef = useRef<HTMLVideoElement>(null);
   const hasVideo = Boolean(jobId || submitting);
   useEffect(() => {
     if (!showResult) resultRef.current?.querySelector('video')?.pause();
   }, [showResult]);
+  useEffect(() => {
+    const video = referenceRef.current;
+    if (!video) return;
+    let playbackFrame = 0;
+    // 先让浏览器绘制服务端文字和封面，再启动预览播放。
+    const paintFrame = requestAnimationFrame(() => {
+      playbackFrame = requestAnimationFrame(() => {
+        void video.play().catch((reason: unknown) => {
+          if (
+            reason instanceof DOMException &&
+            ['AbortError', 'NotAllowedError'].includes(reason.name)
+          ) {
+            // 切换预览会中止播放；禁止自动播放时保留原生播放按钮。
+            return;
+          }
+          setUnavailable(true);
+        });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(paintFrame);
+      cancelAnimationFrame(playbackFrame);
+      video.pause();
+    };
+  }, [sceneId, showResult]);
   return (
     <aside className="bb-effect" id="effect" aria-label="Video preview">
       <div className="bb-effect-heading">
@@ -116,14 +142,14 @@ export function VideoPreview({
           ) : (
             <video
               key={sceneId}
+              ref={referenceRef}
               src={scene.previewVideo}
               poster={scene.previewPoster}
-              autoPlay
               muted
               loop
               playsInline
               controls
-              preload="metadata"
+              preload="none"
               aria-label={`Burning Bridges AI example video: ${scene.name}`}
               onError={() => setUnavailable(true)}
             />

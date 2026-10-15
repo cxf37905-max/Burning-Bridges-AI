@@ -11,9 +11,6 @@ const nextConfig: NextConfig = {
 
   /* config options here */
   devIndicators: false,
-  experimental: {
-    inlineCss: true,
-  },
   serverExternalPackages: ['ffmpeg-static'],
   outputFileTracingIncludes: {
     '/api/studio/**': [
