@@ -85,7 +85,7 @@ export function findPaymentPriceKey(priceId: string) {
 
 // 支付商由环境变量选择：stripe、creem、paypal、waffo 或 dodo
 const paymentProvider = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER ||
-  'waffo') as PaymentConfig['provider'];
+  'dodo') as PaymentConfig['provider'];
 const priceIds = paymentPriceIds[paymentProvider];
 if (!priceIds) throw new Error(`支付服务商配置无效：${paymentProvider}`);
 export const paymentProviderLabels: Record<PaymentConfig['provider'], string> = {

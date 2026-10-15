@@ -7,7 +7,7 @@ This file provides guidance to Code Agents (Codex, Cursor, etc.) when working wi
 - 模板已经实现的成熟功能，优先直接复用其组件、状态管理和交互流程，不另写一套等价逻辑。
 - 登录态、加载占位、支付和积分等通用能力，按模板现有实现接入；品牌样式和明确提出的业务需求按用户要求调整。
 - 确有必要偏离模板时，先向用户说明原因，再进行调整。
-- 支付复用模板五个支付商及共享退款记账，当前默认 Waffo。`NEXT_PUBLIC_PAYMENT_PROVIDER` 是新订单和公开支付商名称的唯一选择入口；切换后重启本地服务或重新构建部署，旧支付商回调按各自 URL 验签，保留原密钥和产品 ID。站内链接复用模板 `RouteLink` / `LocaleLink` 的视图过渡，不另造导航系统。
+- 支付复用模板五个支付商及共享退款记账，当前默认 Dodo Payments。`NEXT_PUBLIC_PAYMENT_PROVIDER` 是新订单和公开支付商名称的唯一选择入口；切换后重启本地服务或重新构建部署，旧支付商回调按各自 URL 验签，保留原密钥和产品 ID。站内链接复用模板 `RouteLink` / `LocaleLink` 的视图过渡，不另造导航系统。
 
 ## 视频生成与重试规则
 

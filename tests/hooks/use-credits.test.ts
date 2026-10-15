@@ -70,17 +70,21 @@ describe('支付返回后的积分同步', () => {
     expect(query.refetchInterval({ state: { data: false } })).toBe(2000);
 
     let finishOldRequest!: (credits: number) => void;
+    const oldRequestAborted = vi.fn();
     const oldRequest = client.fetchQuery({
       queryKey: creditsKeys.balance('buyer'),
-      queryFn: () =>
-        new Promise<number>((resolve) => {
+      queryFn: ({ signal }) => {
+        signal.addEventListener('abort', oldRequestAborted);
+        return new Promise<number>((resolve) => {
           finishOldRequest = resolve;
-        }),
+        });
+      },
     });
-    const canceledRequest = expect(oldRequest).rejects.toBeDefined();
     expect(await query.queryFn()).toBe(true);
+    expect(oldRequestAborted).toHaveBeenCalledOnce();
     finishOldRequest(20);
-    await canceledRequest;
+    // 已有缓存时，React Query 取消请求会返回取消前的余额。
+    await expect(oldRequest).resolves.toBe(20);
     expect(client.getQueryData(creditsKeys.balance('buyer'))).toBe(120);
     expect(query.refetchInterval({ state: { data: true } })).toBe(false);
   });
