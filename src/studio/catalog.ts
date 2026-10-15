@@ -62,6 +62,8 @@ export const partyScenes = [
     poster: '/studio/reference/burning-bridges-ai-video.jpg',
     posterPosition: 'center 30%',
     video: '/studio/reference/burning-bridges-ai-video-15s.mp4',
+    previewVideo: '/studio/previews/chandelier.mp4',
+    previewPoster: '/studio/previews/chandelier.webp',
   },
   {
     id: 'after-hours',
@@ -70,6 +72,8 @@ export const partyScenes = [
     poster: '/studio/reference/burning-bridges-after-party.jpg',
     posterPosition: '72% center',
     video: '/studio/reference/burning-bridges-after-party-15s.mp4',
+    previewVideo: '/studio/previews/after-party.mp4',
+    previewPoster: '/studio/previews/after-party.webp',
   },
 ] as const;
 export type PartySceneId = (typeof partyScenes)[number]['id'];

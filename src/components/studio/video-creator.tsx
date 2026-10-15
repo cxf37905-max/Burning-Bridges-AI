@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import { publicVideoJobSchema, type PublicVideoJob } from '@/studio/video-job-contract';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,9 +12,6 @@ import {
   readPhotoDraft,
   savePhotoDraft,
 } from '@/studio/photo-draft';
-import { TemplatePreviewDialog } from './template-preview-dialog';
-import { StudioSigninDialog } from './studio-signin-dialog';
-import { CreditPackDialog } from './credit-pack-dialog';
 import Image from 'next/image';
 import { RouteLink as Link } from '@/components/layout/locale-link';
 import { ArrowRight, Check, LoaderCircle, Play, Plus, X } from 'lucide-react';
@@ -26,6 +24,24 @@ import {
   photoDimensionsError,
   photoFileError,
 } from '@/studio/photo-validation';
+
+const TemplatePreviewDialog = dynamic(
+  () =>
+    import('./template-preview-dialog').then(
+      (module) => module.TemplatePreviewDialog
+    ),
+  { ssr: false }
+);
+const StudioSigninDialog = dynamic(
+  () =>
+    import('./studio-signin-dialog').then((module) => module.StudioSigninDialog),
+  { ssr: false }
+);
+const CreditPackDialog = dynamic(
+  () =>
+    import('./credit-pack-dialog').then((module) => module.CreditPackDialog),
+  { ssr: false }
+);
 
 interface SelectedPhoto {
   file: File;
@@ -426,7 +442,7 @@ export function VideoCreator({
                       src={scene.poster}
                       alt=""
                       fill
-                      sizes="(max-width: 700px) 44vw, 260px"
+                      sizes="(max-width: 700px) 45px, (max-width: 1080px) 38px, 48px"
                       style={{ objectPosition: scene.posterPosition }}
                     />
                   </span>
@@ -504,22 +520,28 @@ export function VideoCreator({
           )}
         </div>
       </div>
-      <TemplatePreviewDialog
-        sceneId={previewSceneId}
-        onClose={() => setPreviewSceneId(null)}
-      />
-      <StudioSigninDialog
-        open={signinOpen}
-        onOpenChange={setSigninOpen}
-        authReady={authReady}
-      />
-      <CreditPackDialog
-        open={needsPack}
-        onOpenChange={setNeedsPack}
-        purchasesReady={purchasesReady}
-        balance={credits ?? 0}
-        beforeCheckout={preservePhotoDraft}
-      />
+      {previewSceneId && (
+        <TemplatePreviewDialog
+          sceneId={previewSceneId}
+          onClose={() => setPreviewSceneId(null)}
+        />
+      )}
+      {signinOpen && (
+        <StudioSigninDialog
+          open={signinOpen}
+          onOpenChange={setSigninOpen}
+          authReady={authReady}
+        />
+      )}
+      {needsPack && (
+        <CreditPackDialog
+          open={needsPack}
+          onOpenChange={setNeedsPack}
+          purchasesReady={purchasesReady}
+          balance={credits ?? 0}
+          beforeCheckout={preservePhotoDraft}
+        />
+      )}
     </section>
   );
 }

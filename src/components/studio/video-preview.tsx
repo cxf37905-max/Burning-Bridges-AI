@@ -1,13 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { ArrowUpRight, Clapperboard } from 'lucide-react';
 import { RouteLink as Link } from '@/components/layout/locale-link';
 import { VideoPlayerPlaceholder } from './video-player-placeholder';
 import type { PublicVideoJob } from '@/studio/video-job-contract';
 import { partyScenes, type PartySceneId } from '@/studio/catalog';
-import { VideoJobStatus } from './video-job-status';
 import { VideoGenerationState } from './video-generation-state';
+
+const VideoJobStatus = dynamic(
+  () => import('./video-job-status').then((module) => module.VideoJobStatus),
+  { loading: VideoPlayerPlaceholder }
+);
 
 export function VideoPreview({
   sceneId,
@@ -111,8 +116,8 @@ export function VideoPreview({
           ) : (
             <video
               key={sceneId}
-              src={scene.video}
-              poster={scene.poster}
+              src={scene.previewVideo}
+              poster={scene.previewPoster}
               autoPlay
               muted
               loop

@@ -2,12 +2,21 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { authClient } from '@/lib/auth-client';
 import { useMounted } from '@/hooks/use-mounted';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import { StudioAccountMenu } from './studio-account-menu';
-import { StudioSigninDialog } from './studio-signin-dialog';
+const StudioAccountMenu = dynamic(
+  () =>
+    import('./studio-account-menu').then((module) => module.StudioAccountMenu),
+  { loading: () => <Skeleton className="size-8 rounded-full" /> }
+);
+const StudioSigninDialog = dynamic(
+  () =>
+    import('./studio-signin-dialog').then((module) => module.StudioSigninDialog),
+  { ssr: false }
+);
 
 export function StudioAccount({ authReady = false }: { authReady?: boolean }) {
   const searchParams = useSearchParams();
@@ -40,23 +49,25 @@ export function StudioAccount({ authReady = false }: { authReady?: boolean }) {
         >
           Sign in
         </button>
-        <StudioSigninDialog
-          key={requestedMode || 'default'}
-          open={signinOpen || authRequested}
-          initialMode={requestedMode === 'register' ? 'register' : 'login'}
-          callbackUrl={searchParams.get('callbackUrl') || '/#studio'}
-          onOpenChange={(next) => {
-            setSigninOpen(next);
-            if (!next && authRequested) {
-              const url = new URL(window.location.href);
-              url.searchParams.delete('auth');
-              url.searchParams.delete('callbackUrl');
-              // 由 Next.js 同步路由状态，避免登录参数清除后弹窗仍被旧参数撑开。
-              window.history.replaceState(null, '', url);
-            }
-          }}
-          authReady={authReady}
-        />
+        {(signinOpen || authRequested) && (
+          <StudioSigninDialog
+            key={requestedMode || 'default'}
+            open={signinOpen || authRequested}
+            initialMode={requestedMode === 'register' ? 'register' : 'login'}
+            callbackUrl={searchParams.get('callbackUrl') || '/#studio'}
+            onOpenChange={(next) => {
+              setSigninOpen(next);
+              if (!next && authRequested) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('auth');
+                url.searchParams.delete('callbackUrl');
+                // 由 Next.js 同步路由状态，避免登录参数清除后弹窗仍被旧参数撑开。
+                window.history.replaceState(null, '', url);
+              }
+            }}
+            authReady={authReady}
+          />
+        )}
       </>
     );
   return <StudioAccountMenu user={session.user} />;
