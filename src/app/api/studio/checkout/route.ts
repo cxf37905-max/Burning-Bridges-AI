@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     );
   if (!getStudioAvailability().purchasesReady)
     return Response.json(
-      { error: 'Purchases open when video generation is ready.' },
+      { error: 'Credit purchases are not open yet.' },
       { status: 503 }
     );
   let body: unknown;

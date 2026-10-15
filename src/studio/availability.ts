@@ -37,7 +37,7 @@ export function getStudioAvailability() {
       productIds.length > 0 && productIds.every(Boolean) &&
       new Set(productIds).size === productIds.length
   );
-  // 上线开关用于在真实样片、计费和政策完成验证后开放付费服务。
+  // 视频生成与积分购买分别开放，配置支付不能顺带开启付费模型调用。
   const generationReady =
     authReady &&
     process.env.STUDIO_LAUNCH_READY === 'true' &&
@@ -63,6 +63,8 @@ export function getStudioAvailability() {
     passwordResetReady,
     googleReady,
     generationReady,
-    purchasesReady: authReady && paymentReady && (generationReady || sandboxPayment),
+    purchasesReady:
+      authReady && paymentReady &&
+      (process.env.STUDIO_PAYMENTS_READY === 'true' || sandboxPayment),
   };
 }
