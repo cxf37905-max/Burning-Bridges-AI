@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         ← Back to Burning Bridges AI
       </Link>
       <h1>Burning Bridges AI privacy policy.</h1>
-      <div className="bb-article-meta">Updated October 14, 2026</div>
+      <div className="bb-article-meta">Updated October 15, 2026</div>
       <p>
         This Privacy Policy explains how Burning Bridges AI collects, uses and
         shares your information when you use burningbridgesai.cc and its
@@ -196,6 +196,11 @@ export default function PrivacyPage() {
           Google, if you choose Google sign-in, to authenticate your account.
         </li>
         <li>Resend, which delivers account and password-reset emails.</li>
+        <li>
+          Google Analytics, which measures website traffic, and Microsoft
+          Clarity, which helps us understand page interactions through heatmaps
+          and session replay. Section 7 explains these tools.
+        </li>
         <li>fal.ai and its model providers, which generate your video.</li>
         <li>
           {paymentProviderLabel}, which processes credit purchases and payment status updates.
@@ -213,9 +218,7 @@ export default function PrivacyPage() {
       </ul>
       <p>
         Service providers receive information relevant to their work. We do not
-        sell your personal information. Optional analytics and session replay
-        are not currently enabled; Section 7 explains our approach to these
-        technologies.
+        sell your personal information.
       </p>
 
       <h2>7. Cookies and similar technology</h2>
@@ -233,11 +236,44 @@ export default function PrivacyPage() {
         stored data in your browser settings.
       </p>
       <p>
-        We do not currently enable optional analytics, advertising trackers or
-        session replay. If we introduce tools such as Google Analytics or
-        Microsoft Clarity, we will explain what they collect and why, update
-        this Policy and obtain consent where required before using them. We do
-        not treat agreement to our Terms as consent to optional tracking.
+        We use Google Analytics to understand page visits, referral sources and
+        browser and device information. We use Microsoft Clarity to understand
+        clicks, scrolling and other page interactions through heatmaps and
+        session replay. These providers may use cookies and similar technology
+        to distinguish visits. Clarity masking is used to protect sensitive
+        page content; we do not intentionally send uploaded photos, generated
+        videos, passwords or payment details as analytics events.
+      </p>
+      <p>
+        You can block or clear analytics cookies using your browser settings or
+        tracking protection. Google also provides the{' '}
+        <a
+          className={policyLinkClassName}
+          href="https://tools.google.com/dlpage/gaoptout"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Google Analytics opt-out browser add-on
+        </a>
+        . You can read more in{' '}
+        <a
+          className={policyLinkClassName}
+          href="https://policies.google.com/privacy"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Google's Privacy Policy
+        </a>{' '}
+        and the{' '}
+        <a
+          className={policyLinkClassName}
+          href="https://privacy.microsoft.com/privacystatement"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Microsoft Privacy Statement
+        </a>
+        . Agreement to our Terms is not consent to optional tracking.
       </p>
 
       <h2>8. Your choices and rights</h2>
