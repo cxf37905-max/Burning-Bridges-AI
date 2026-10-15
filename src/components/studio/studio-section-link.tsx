@@ -15,6 +15,7 @@ export function StudioSectionLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       className={className}
     >
       {children}

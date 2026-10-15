@@ -48,7 +48,7 @@ export function VideoTemplates() {
         ))}
       </div>
       <div className="bb-section-action">
-        <Link className="bb-button" href="#create">
+        <Link className="bb-button" href="#create" prefetch={false}>
           Try a template <ArrowUpRight size={16} />
         </Link>
       </div>

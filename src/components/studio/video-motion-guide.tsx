@@ -62,7 +62,7 @@ export function VideoMotionGuide() {
           One photo goes in. A complete Burning Bridges-style AI video comes
           out.
         </p>
-        <Link className="bb-button" href="#create">
+        <Link className="bb-button" href="#create" prefetch={false}>
           Make my video <ArrowUpRight size={16} />
         </Link>
       </div>

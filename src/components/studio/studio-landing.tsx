@@ -72,7 +72,7 @@ export function StudioLanding({
           <p className="bb-final-specs">
             One photo · 15-second video · HD 720p
           </p>
-          <Link className="bb-button" href="#create">
+          <Link className="bb-button" href="#create" prefetch={false}>
             Make my video <ArrowUpRight size={18} />
           </Link>
           <p>No filming. No editing. No prompt required.</p>

@@ -485,7 +485,7 @@ export function VideoCreator({
             />
             <span>
               I only use photos of myself or of people who agreed to appear, and
-              I accept the <Link href="/terms">Terms</Link>. The video is
+              I accept the <Link href="/terms" prefetch={false}>Terms</Link>. The video is
               AI-generated, not real footage.
             </span>
           </label>

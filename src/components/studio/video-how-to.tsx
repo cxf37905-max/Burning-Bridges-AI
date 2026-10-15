@@ -45,7 +45,7 @@ export function VideoHowTo() {
           ))}
         </div>
         <div className="bb-section-action">
-          <Link className="bb-button" href="#create">
+          <Link className="bb-button" href="#create" prefetch={false}>
             Create my Burning Bridges video <ArrowUpRight size={16} />
           </Link>
         </div>
