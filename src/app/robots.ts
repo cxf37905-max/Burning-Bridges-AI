@@ -20,6 +20,6 @@ export default function robots(): MetadataRoute.Robots {
         '/en/auth/',
       ],
     },
-    sitemap: `${studioBrand.url}/sitemap.xml`,
+    sitemap: `${studioBrand.url}/sitemap/sitemap.xml`,
   };
 }
