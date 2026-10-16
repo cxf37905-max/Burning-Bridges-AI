@@ -1,8 +1,11 @@
+import { after } from 'next/server';
 import { falWebhookPayload, FalWebhookError, recordFalWebhook } from '@/studio/fal-webhook';
 import { falWebhookContext, verifyFalWebhookContext } from '@/studio/fal-webhook-url';
 import { verifyFalWebhookSignature } from '@/studio/fal-webhook-signature';
+import { completeCallbackVideo } from '@/studio/video-jobs';
 
-export const maxDuration = 60;
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 async function webhookBody(request: Request) {
   const reader = request.body?.getReader();
@@ -52,7 +55,23 @@ export async function POST(request: Request) {
     const headerId = request.headers.get('x-fal-webhook-request-id');
     if (headerId !== parsed.data.request_id && headerId !== parsed.data.gateway_request_id)
       throw new FalWebhookError('Generation callback header identity does not match.', 401);
-    await recordFalWebhook(context.data, parsed.data);
+    const pending = await recordFalWebhook(context.data, parsed.data);
+    if (pending) {
+      after(async () => {
+        try {
+          await completeCallbackVideo(context.data);
+        } catch (reason) {
+          // 不将带私有签名地址的底层异常输出到日志；非 2xx 已保留重投机会。
+          const kind = reason instanceof Error ? reason.name : 'UnknownError';
+          throw new Error(`视频 ${context.data.videoId} 回调后处理待重试（${kind}）。`);
+        }
+      });
+      // 成片保存或退款落库前不确认投递完成，避免函数中断后永久丢失后处理。
+      return Response.json({ received: true, processing: true }, {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store', 'Retry-After': '10' },
+      });
+    }
     return Response.json({ received: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (reason) {
     if (reason instanceof FalWebhookError)

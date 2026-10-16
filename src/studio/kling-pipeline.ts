@@ -92,8 +92,11 @@ export function klingStepRequest(pipeline: KlingPipeline, id: StepId) {
     input: {
       prompt: 'Replace the main character in @Video1 with @Element1.',
       video_url: pipeline.referenceVideoUrl,
-      // 单张主体照片绑定为角色元素，不作为普通风格参考图。
-      elements: [{ frontal_image_url: pipeline.photoUrl }],
+      // 接口要求两个字段；复用同一张真实照片，不伪造其他角度。
+      elements: [{
+        frontal_image_url: pipeline.photoUrl,
+        reference_image_urls: [pipeline.photoUrl],
+      }],
       keep_audio: false,
     },
   };

@@ -13,6 +13,7 @@ import { videoCreditCost } from './catalog';
 import { storeStudioPhoto } from './photo-storage';
 import { storeStudioReference } from './reference-storage';
 import { createFalWebhookUrl } from './fal-webhook-url';
+import type { FalWebhookContext } from './fal-webhook-url';
 import { FalSubmissionNotSentError } from './fal-submission-error';
 import { getKlingTemplate } from './kling-templates';
 import { finishStudioVideo } from './video-storage';
@@ -94,7 +95,12 @@ async function returnFailedVideoCredits(
   });
 }
 
-async function advanceOwnedVideo(id: string, userId: string, picture?: Buffer) {
+async function advanceOwnedVideo(
+  id: string,
+  userId: string,
+  picture?: Buffer,
+  callback?: FalWebhookContext
+) {
   const db = await getDb();
   const owner = randomUUID();
   const [video] = await db
@@ -132,6 +138,18 @@ async function advanceOwnedVideo(id: string, userId: string, picture?: Buffer) {
     if (!saved) throw new Error(`Video lease was lost: ${id}`);
   };
   try {
+    if (callback) {
+      // 回调只能处理自己已提交的任务，不能进入首次模型提交分支。
+      const recorded = klingPipelineSchema.parse(pipeline);
+      const step = recorded.steps[0];
+      if (
+        step.submissionId !== callback.submissionId ||
+        step.id !== callback.stepId ||
+        !step.requestId ||
+        !['queued', 'done', 'failed'].includes(step.state)
+      )
+        throw new Error(`Video ${id} has no matching submitted callback task.`);
+    }
     if (!pipeline) {
       // 旧版本的已提交任务不能当作新任务重复收费。
       if (video.requestBody || video.providerTaskId)
@@ -299,6 +317,21 @@ export async function refreshStudioVideo(id: string, userId: string) {
   if (Date.now() - video.updatedAt.getTime() >= 8000)
     await advanceOwnedVideo(id, userId);
   return getOwnedVideo(id, userId);
+}
+
+export async function completeCallbackVideo(context: FalWebhookContext) {
+  const db = await getDb();
+  const [video] = await db.select({ userId: studioVideo.userId })
+    .from(studioVideo).where(eq(studioVideo.id, context.videoId));
+  if (!video) throw new Error(`Callback video ${context.videoId} was not found.`);
+  // 查询结果和合成最多各推进一次；失败后由同一回调重投继续，不创建新任务。
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await advanceOwnedVideo(context.videoId, video.userId, undefined, context);
+    const saved = await getOwnedVideo(context.videoId, video.userId);
+    if (saved.status === 'succeeded' || saved.status === 'failed') return;
+    if (saved.leaseUntil && saved.leaseUntil > new Date()) break;
+  }
+  throw new Error(`Callback video ${context.videoId} is awaiting another delivery.`);
 }
 
 // 调度器只推进服务端查到的待处理任务，不接受外部传入的用户或任务身份。

@@ -50,6 +50,7 @@ import {
   getOwnedVideo,
   refreshStudioVideo,
   publicVideoJob,
+  completeCallbackVideo,
 } from '../../src/studio/video-jobs';
 
 const postgres = new PGlite();
@@ -129,6 +130,73 @@ function rejectFalTask() {
 }
 
 describe('本地 PostgreSQL 扣费与退款事务', () => {
+  it('关闭页面后回调完成合成，重复投递不重生成或重复合成', async () => {
+    const video = await createStudioVideo(
+      'alice', randomUUID(), 'chandelier', Buffer.from('photo')
+    );
+    const pipeline = video.klingPipeline!;
+    pipeline.steps[0].state = 'done';
+    pipeline.steps[0].output = { video: { url: 'https://videos.example/source.mp4' } };
+    await db.update(studioVideo).set({ klingPipeline: pipeline })
+      .where(eq(studioVideo.id, video.id));
+    const context = {
+      videoId: video.id, stepId: 'segment-1' as const,
+      submissionId: pipeline.steps[0].submissionId!,
+    };
+    await completeCallbackVideo(context);
+    await completeCallbackVideo(context);
+    expect((await getOwnedVideo(video.id, 'alice')).status).toBe('succeeded');
+    expect(await balance()).toBe(100);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
+    expect(dependencies.read).not.toHaveBeenCalled();
+    expect(dependencies.compose).toHaveBeenCalledTimes(1);
+  });
+  it('回调完成失败退款，重复投递仍只退一次', async () => {
+    const video = await createStudioVideo(
+      'alice', randomUUID(), 'chandelier', Buffer.from('photo')
+    );
+    const pipeline = video.klingPipeline!;
+    pipeline.steps[0].state = 'failed';
+    pipeline.steps[0].failures = [{
+      endpoint: 'fal-ai/kling-video/o3/standard/video-to-video/edit',
+      requestId: pipeline.steps[0].requestId!, source: 'webhook',
+      status: 'ERROR', error: 'invalid input',
+    }];
+    await db.update(studioVideo).set({ klingPipeline: pipeline })
+      .where(eq(studioVideo.id, video.id));
+    const context = {
+      videoId: video.id, stepId: 'segment-1' as const,
+      submissionId: pipeline.steps[0].submissionId!,
+    };
+    await completeCallbackVideo(context);
+    await completeCallbackVideo(context);
+    expect((await getOwnedVideo(video.id, 'alice')).status).toBe('failed');
+    expect(await balance()).toBe(200);
+    expect(await db.select().from(creditTransaction)
+      .where(eq(creditTransaction.type, 'REFUND'))).toHaveLength(1);
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
+    expect(dependencies.read).not.toHaveBeenCalled();
+  });
+  it('过期回调不能推进另一提交，也不能启动空闲模型步骤', async () => {
+    const video = await createStudioVideo(
+      'alice', randomUUID(), 'chandelier', Buffer.from('photo')
+    );
+    const context = {
+      videoId: video.id, stepId: 'segment-1' as const,
+      submissionId: randomUUID(),
+    };
+    await expect(completeCallbackVideo(context)).rejects.toThrow('matching submitted');
+    const pipeline = video.klingPipeline!;
+    pipeline.steps[0].state = 'idle';
+    await db.update(studioVideo).set({ klingPipeline: pipeline })
+      .where(eq(studioVideo.id, video.id));
+    await expect(completeCallbackVideo({
+      ...context, submissionId: pipeline.steps[0].submissionId!,
+    })).rejects.toThrow('matching submitted');
+    expect(dependencies.submit).toHaveBeenCalledTimes(1);
+    expect(dependencies.read).not.toHaveBeenCalled();
+    expect(dependencies.compose).not.toHaveBeenCalled();
+  });
   it('同一提交重复请求只扣一个 take、只提交一次模型', async () => {
     const requestId = randomUUID();
     const photo = Buffer.from('normalized photo');

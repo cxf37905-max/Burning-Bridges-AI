@@ -42,7 +42,7 @@ export async function recordFalWebhook(
     const [existing] = await db.select({ status: studioVideo.status })
       .from(studioVideo).where(eq(studioVideo.id, context.videoId));
     if (!existing) throw new FalWebhookError('Generation callback task was not found.', 404);
-    if (['succeeded', 'failed'].includes(existing.status)) return;
+    if (['succeeded', 'failed'].includes(existing.status)) return false;
     // 不与页面或调度器争写状态；非2xx让fal重新投递同一个回调，不会重新生成。
     throw new FalWebhookError('Generation task is busy. Retry this callback.', 503);
   }
@@ -51,14 +51,12 @@ export async function recordFalWebhook(
     const step = pipeline.steps.find((entry) => entry.id === context.stepId);
     if (!step)
       throw new FalWebhookError('Generation callback step does not belong to this task.', 409);
-    // 旧重试的迟到回调不能覆盖新的提交；终态回调幂等确认。
-    if (
-      pipeline.failureReason || pipeline.videoUrl ||
-      step.submissionId !== context.submissionId ||
-      step.state === 'done' || step.state === 'failed'
-    ) return;
+    // 旧提交的迟到回调不能覆盖新的提交。
+    if (step.submissionId !== context.submissionId || pipeline.videoUrl) return false;
     if (step.requestId && step.requestId !== result.request_id)
       throw new FalWebhookError('Generation callback request identity does not match.', 409);
+    // 已记录结果仍可能没有合成或退款；重复投递应继续本地处理。
+    if (step.state === 'done' || step.state === 'failed') return true;
     const request = klingStepRequest(pipeline, step.id)!;
     // 用本项目FAL_KEY再读一次任务，确认归属和终态；不只凭回调链接绑定未知任务。
     const queue = await readFalQueueStatus(request.endpoint, result.request_id);
@@ -97,6 +95,7 @@ export async function recordFalWebhook(
       eq(studioVideo.leaseOwner, owner)
     )).returning({ id: studioVideo.id });
     if (!saved) throw new FalWebhookError('Generation callback lost its task lease.', 503);
+    return true;
   } finally {
     await db.update(studioVideo).set({ leaseOwner: null, leaseUntil: null })
       .where(and(eq(studioVideo.id, context.videoId), eq(studioVideo.leaseOwner, owner)));

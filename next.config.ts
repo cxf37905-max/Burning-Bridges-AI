@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
       './public/studio/reference/*-ref-15s.mp4',
       './public/studio/reference/*-ref-15s-audio.m4a',
     ],
+    '/api/webhooks/fal': [
+      './node_modules/.pnpm/ffmpeg-static@*/node_modules/ffmpeg-static/ffmpeg*',
+      './public/studio/reference/*-ref-15s-audio.m4a',
+    ],
   },
 
   // https://nextjs.org/docs/architecture/nextjs-compiler#remove-console

@@ -20,10 +20,7 @@ import {
   videoCreditCost,
   type PartySceneId,
 } from '@/studio/catalog';
-import {
-  photoDimensionsError,
-  photoFileError,
-} from '@/studio/photo-validation';
+import { preparePhotoUpload } from '@/studio/photo-upload';
 
 const TemplatePreviewDialog = dynamic(
   () =>
@@ -50,14 +47,8 @@ interface SelectedPhoto {
   height: number;
 }
 
-async function readPhoto(file: File): Promise<SelectedPhoto> {
-  const error = photoFileError(file);
-  if (error) throw new Error(error);
-  const bitmap = await createImageBitmap(file);
-  const dimensionsError = photoDimensionsError(bitmap.width, bitmap.height);
-  const { width, height } = bitmap;
-  bitmap.close();
-  if (dimensionsError) throw new Error(dimensionsError);
+async function readPhoto(source: File): Promise<SelectedPhoto> {
+  const { file, width, height } = await preparePhotoUpload(source);
   // 数据 URL 不占用需要额外清理的对象 URL；这里只在浏览器中预览照片。
   const url = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -232,6 +223,12 @@ export function VideoCreator({
         void refreshSession();
         return;
       }
+      if (response.status === 413)
+        throw new Error('This photo is too large to upload. Choose a smaller file.');
+      if (!response.headers.get('content-type')?.includes('application/json'))
+        throw new Error(
+          'The server could not accept this upload. Retry the same video or check My videos.'
+        );
       const result = await response.json();
       if (response.status === 402) setNeedsPack(true);
       if (!response.ok || typeof result.id !== 'string')

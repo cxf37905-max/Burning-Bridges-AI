@@ -22,7 +22,10 @@ describe('单次15秒生成状态', () => {
     expect(klingStepRequest(pipeline, 'segment-1')?.input).toEqual({
       prompt: 'Replace the main character in @Video1 with @Element1.',
       video_url: 'https://references.example/full-15s.mp4',
-      elements: [{ frontal_image_url: 'https://photos.example/subject.jpg' }],
+      elements: [{
+        frontal_image_url: 'https://photos.example/subject.jpg',
+        reference_image_urls: ['https://photos.example/subject.jpg'],
+      }],
       keep_audio: false,
     });
   });
